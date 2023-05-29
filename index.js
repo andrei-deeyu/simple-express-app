@@ -3,6 +3,8 @@ const volleyball = require('volleyball');
 const cors = require('cors');
 const methodOverride = require('method-override')
 
+const connectDB = require('./config/db')
+
 // Load config
 require('dotenv').config({ path: './config/config.env' })
 
@@ -11,6 +13,10 @@ const app = express();
 
 // Import our modules
 const api = require('./api');
+
+
+// Connect to cloud hosted MongoDB
+connectDB()
 
 app.use(volleyball);
 app.use(cors({

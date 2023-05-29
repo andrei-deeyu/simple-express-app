@@ -1,125 +1,105 @@
 const express = require('express');
 const router = express.Router();
 
+const Joi = require('joi');
 
+const Exchange = require('../models/Exchange');
 
-// const testData = JSON.parse(fs.readFileSync('./api/testData.json', 'utf-8'));
-const { writeFile, readFile } = require('fs');
+const postSchema = Joi.object({
+  userId: Joi.number(),
+  title: Joi.string().trim().min(3).max(256).required(),
+  body: Joi.string().trim().max(596).allow('')
+});
 
-const testData = './api/testData.json';
+function respondError500(res, next) {
+  res.status(500);
+  const error = new Error('Something happened! Try again.');
+  next(error);
+}
+
 
 // @desc    get exchange data
 // @route   GET /exchange
-router.get('/exchange', (req, res, next) => {
-  readFile(testData, (error, data) => {
-    if (error) {
-      console.log(error);
-      return res.json({});
-    }
-    console.log(typeof data)
-    return res.json(JSON.parse(data).reverse());
-  });
-})
+router.get('/exchange', async (req, res, next) => {
+  let choosePage;
+
+  if( req.get('choosePage') ) choosePage = JSON.parse( req.get('choosePage') );
+  else choosePage = 1;
+
+  let perPage = 9;
+  let n = (choosePage-1) * perPage;
+
+
+  try {
+    let result = await Exchange.find({})
+    .sort({ createdAt: -1 })
+    .skip(n)
+    .limit(perPage)
+      .populate()
+      .lean();
+
+    let collectionSize = await Exchange.estimatedDocumentCount();
+    let pagesToShow = Math.ceil(collectionSize / perPage)
+
+    return res.json({ pagesToShow, pageActive: choosePage, result });
+  } catch( err ) {
+    return respondError500(res, next);
+  }
+});
 
 // @desc    get post data
 // @route   GET /exchange/post/:postId
-router.get('/exchange/post/:postId', (req, res, next) => {
-  let postId = parseInt(req.params.postId);
+router.get('/exchange/post/:postId', async (req, res, next) => {
+  let postId = req.params.postId;
 
-  readFile(testData, (error, data) => {
-    let post = JSON.parse(data).find(el => el.id == postId);
-
-    if( post ) return res.json( post )
-    return res.json({}); // throw 404 error || unexcepted
-  });
+  await Exchange.findOne({ _id: postId })
+  .then(( result ) => res.json(result))
+  .catch(( err ) => respondError500(res, next));
 })
 
 
 // @desc   create post
 // @route  POST /exchange
-router.post('/exchange', (req, res, next) => {
-  const randomId = Math.round(Math.random()*10000);
+router.post('/exchange', async (req, res, next) => {
+  const result = postSchema.validate(req.body)
 
-  let newPost = {
-    ...req.body,
-    id: randomId
+  if(result.error == null) {
+    let newPost = {
+      ...req.body,
+      createdAt: Date.now()
+    }
+
+    await Exchange.create(newPost)
+      .then(( result ) => {
+        result.__v = undefined;
+        return res.json(result)
+      })
+      .catch(( error ) => respondError500(res, next));
+  } else {
+    const error = new Error(result.error);
+    res.status(422);
+    return next(error);
   }
-
-  readFile(testData, (error, data) => {
-    if (error) return res.json({});
-
-    const parsedData = JSON.parse(data);
-    parsedData.push(newPost);
-
-    writeFile(testData, JSON.stringify(parsedData, null, 2), (err) => {
-      if ( err ) {
-        console.log('Failed to write updated data to file');
-        return res.json({});
-      }
-
-      console.log('Updated file successfully');
-      return res.json({ id: randomId });
-    });
-  });
 });
 
 // @desc   remove post
 // @route  DELETE /exchange/post/:postId
-router.delete('/exchange/post/:postId', (req, res, next) => {
-  let postId = parseInt(req.params.postId);
+router.delete('/exchange/post/:postId', async (req, res, next) => {
+  let postId = req.params.postId;
 
-  readFile(testData, (error, data) => {
-    if (error) return res.json({});
-
-    const parsedData = JSON.parse(data);
-    let index;
-    parsedData.find((el, i) => {
-      if(el.id == postId) return index = i;
-    });
-    console.log(index)
-    parsedData.splice(index, 1);
-
-    //console.log(parsedData)
-    //console.log(index + 'ataat')
-    //console.log(index)
-
-    writeFile(testData, JSON.stringify(parsedData, null, 2), (err) => {
-      if ( err ) {
-        console.log('Failed to write updated data to file');
-        return res.json({});
-      }
-
-      console.log('Updated file successfully');
-      return res.json({});
-    });
-  });
+  await Exchange.findOneAndRemove({ _id: postId })
+  .then(( result ) => res.json({ }))
+  .catch(( err ) => respondError500(res, next));
 })
 
 
 // @desc   like post
 // @route  PATCH /exchange/post/:postId
-router.patch('/exchange/post/:postId', (req, res, next) => {
-  let postId = parseInt(req.params.postId);
-
-  readFile(testData, (error, data) => {
-    if (error) return res.json({});
-
-    const parsedData = JSON.parse(data);
-
-    parsedData.find((el, i) => {
-      if(el.id == postId) el.isLiked = req.body.isLiked;
-    });
-
-    writeFile(testData, JSON.stringify(parsedData, null, 2), (err) => {
-      if ( err ) {
-        console.log('Failed to write updated data to file');
-        return res.json({});
-      }
-
-      console.log('Updated file successfully');
-      return res.json({});
-    });
-  });
+router.patch('/exchange/post/:postId', async (req, res, next) => {
+  let postId = req.params.postId;
+  await Exchange.findOneAndUpdate({ _id: postId }, { isLiked: req.body.isLiked })
+  .then(( result ) => res.json({}) )
+  .catch(( err ) => respondError500(res, next));
 })
 
 
