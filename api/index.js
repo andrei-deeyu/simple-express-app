@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 
+const { WebSocketServer } = require('ws');
+const WebSocket = require('ws');
+const wss = new WebSocketServer({ port: 3000 });
+
 const Joi = require('joi');
 
 const Exchange = require('../models/Exchange');
@@ -55,7 +59,7 @@ router.get('/exchange/post/:postId', async (req, res, next) => {
   await Exchange.findOne({ _id: postId })
   .then(( result ) => res.json(result))
   .catch(( err ) => respondError500(res, next));
-})
+});
 
 
 // @desc   create post
@@ -72,9 +76,17 @@ router.post('/exchange', async (req, res, next) => {
     await Exchange.create(newPost)
       .then(( result ) => {
         result.__v = undefined;
+
+        wss.clients.forEach(function each(client, value2) {
+          client.send(JSON.stringify( result ))
+        });
+
         return res.json(result)
       })
-      .catch(( error ) => respondError500(res, next));
+      .catch(( error ) => {
+        console.log(error);
+        return respondError500(res, next)
+      });
   } else {
     const error = new Error(result.error);
     res.status(422);
