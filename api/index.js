@@ -21,6 +21,18 @@ function respondError500(res, next) {
   next(error);
 }
 
+function respondError422(res, next, message) {
+  res.status(422);
+  const error = new Error(message ?? 'Bad input');
+  next(error);
+}
+
+function respondError404(res, next) {
+  res.status(404);
+  const error = new Error('Not found');
+  next(error);
+}
+
 
 // @desc    get exchange data
 // @route   GET /exchange
@@ -58,7 +70,7 @@ router.get('/exchange/post/:postId', async (req, res, next) => {
 
   await Exchange.findOne({ _id: postId })
   .then(( result ) => res.json(result))
-  .catch(( err ) => respondError500(res, next));
+  .catch(( err ) => respondError404(res, next));
 });
 
 
@@ -80,17 +92,11 @@ router.post('/exchange', async (req, res, next) => {
         wss.clients.forEach(function each(client, value2) {
           client.send(JSON.stringify( result ))
         });
-
         return res.json(result)
       })
-      .catch(( error ) => {
-        console.log(error);
-        return respondError500(res, next)
-      });
+      .catch(( error ) => respondError500(res, next));
   } else {
-    const error = new Error(result.error);
-    res.status(422);
-    return next(error);
+    return respondError422(res, next, result.error.message)
   }
 });
 
@@ -100,7 +106,12 @@ router.delete('/exchange/post/:postId', async (req, res, next) => {
   let postId = req.params.postId;
 
   await Exchange.findOneAndRemove({ _id: postId })
-  .then(( result ) => res.json({ }))
+  .then(( result ) => {
+    wss.clients.forEach(function each(client, value2) {
+      client.send(JSON.stringify({ removed: postId }))
+    });
+    return res.json({ })
+  })
   .catch(( err ) => respondError500(res, next));
 })
 
@@ -110,7 +121,13 @@ router.delete('/exchange/post/:postId', async (req, res, next) => {
 router.patch('/exchange/post/:postId', async (req, res, next) => {
   let postId = req.params.postId;
   await Exchange.findOneAndUpdate({ _id: postId }, { isLiked: req.body.isLiked })
-  .then(( result ) => res.json({}) )
+  .then(( result ) => {
+    wss.clients.forEach(function each(client, value2) {
+      client.send(JSON.stringify({ liked: postId, eventValue: req.body.isLiked }))
+    });
+
+    return res.json({})
+  })
   .catch(( err ) => respondError500(res, next));
 })
 
