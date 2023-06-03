@@ -13,6 +13,7 @@ const app = express();
 
 // Import our modules
 const api = require('./api');
+const publicApi = require('./publicAPI')
 
 
 // Connect to cloud hosted MongoDB
@@ -46,7 +47,8 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use('/api/v1', api);
+app.use('/api/v1', api); // require authorization
+app.use('/api/v0', publicApi) // doesn't require authorization
 
 
 function notFound(req, res, next) {

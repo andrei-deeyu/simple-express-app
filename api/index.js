@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
+const { isLoggedIn } = require('../auth/middlewares');
+
 const { WebSocketServer } = require('ws');
-const WebSocket = require('ws');
 const wss = new WebSocketServer({ port: 3000 });
 
 const Joi = require('joi');
@@ -59,6 +60,7 @@ router.get('/exchange', async (req, res, next) => {
 
     return res.json({ pagesToShow, pageActive: choosePage, result });
   } catch( err ) {
+    console.log(err)
     return respondError500(res, next);
   }
 });
@@ -76,7 +78,7 @@ router.get('/exchange/post/:postId', async (req, res, next) => {
 
 // @desc   create post
 // @route  POST /exchange
-router.post('/exchange', async (req, res, next) => {
+router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const result = postSchema.validate(req.body)
 
   if(result.error == null) {
@@ -102,7 +104,7 @@ router.post('/exchange', async (req, res, next) => {
 
 // @desc   remove post
 // @route  DELETE /exchange/post/:postId
-router.delete('/exchange/post/:postId', async (req, res, next) => {
+router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   let postId = req.params.postId;
 
   await Exchange.findOneAndRemove({ _id: postId })
@@ -112,13 +114,16 @@ router.delete('/exchange/post/:postId', async (req, res, next) => {
     });
     return res.json({ })
   })
-  .catch(( err ) => respondError500(res, next));
+  .catch(( err ) => {
+    console.log(err)
+    respondError500(res, next)
+  });
 })
 
 
 // @desc   like post
 // @route  PATCH /exchange/post/:postId
-router.patch('/exchange/post/:postId', async (req, res, next) => {
+router.patch('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   let postId = req.params.postId;
   await Exchange.findOneAndUpdate({ _id: postId }, { isLiked: req.body.isLiked })
   .then(( result ) => {
