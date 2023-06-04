@@ -37,7 +37,9 @@ function respondError404(res, next) {
 
 // @desc    get exchange data
 // @route   GET /exchange
-router.get('/exchange', async (req, res, next) => {
+router.get('/exchange', isLoggedIn, async (req, res, next) => {
+  console.log(req.body)
+  console.log(req.auth)
   let choosePage;
 
   if( req.get('choosePage') ) choosePage = JSON.parse( req.get('choosePage') );
@@ -67,7 +69,7 @@ router.get('/exchange', async (req, res, next) => {
 
 // @desc    get post data
 // @route   GET /exchange/post/:postId
-router.get('/exchange/post/:postId', async (req, res, next) => {
+router.get('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   let postId = req.params.postId;
 
   await Exchange.findOne({ _id: postId })

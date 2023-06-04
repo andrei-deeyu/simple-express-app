@@ -12,8 +12,9 @@ require('dotenv').config({ path: './config/config.env' })
 const app = express();
 
 // Import our modules
+const auth = require('./auth');
 const api = require('./api');
-const publicApi = require('./publicAPI')
+const publicApi = require('./publicAPI');
 
 
 // Connect to cloud hosted MongoDB
@@ -47,6 +48,7 @@ app.get('/', (req, res) => {
   });
 });
 
+app.use('/auth', auth)
 app.use('/api/v1', api); // require authorization
 app.use('/api/v0', publicApi) // doesn't require authorization
 
