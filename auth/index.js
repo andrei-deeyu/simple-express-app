@@ -3,7 +3,8 @@ const { isLoggedIn } = require('./middlewares');
 const express = require('express'),
       router = express.Router(),
       fetch = require('node-fetch'),
-      ManagementClient  = require('auth0').ManagementClient ;
+      ManagementClient  = require('auth0').ManagementClient,
+      Joi = require('joi');
 
 const auth0 = new ManagementClient ({
   domain: process.env.DOMAIN,
@@ -12,6 +13,9 @@ const auth0 = new ManagementClient ({
   scope: 'update:users'
 });
 
+const userSchema = Joi.object({
+  name: Joi.string().trim().min(3).max(15).required()
+});
 
 function respondError500(res, next) {
   res.status(500);
@@ -39,7 +43,7 @@ router.get('/', (req, res) => {
   });
 });
 
-//audience: 'https://dev-deeyu.eu.auth0.com/api/v2/'
+
 // Connect to the Auth0 Management API
 auth0.getAccessToken().then((management_access_token) => {
   console.log(management_access_token)
@@ -47,24 +51,21 @@ auth0.getAccessToken().then((management_access_token) => {
   // @desc  resend verification email
   // @route   POST /verification-email
   router.get('/verification-email', isLoggedIn, async (req, res, next) => {
-    // let user_email = req.auth[`${process.env.ACCESS_TOKEN_NAMESPACE}email`]
-    console.log(req.auth)
-    console.log(req.auth.sub)
+    await auth0.sendEmailVerification({ "user_id": req.auth.sub})
+      .then(response => res.json({ "status": "pending" }))
+      .catch(err => respondError500(res, next));
+  });
 
-    await fetch('https://dev-deeyu.eu.auth0.com/api/v2/jobs/verification-email', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${management_access_token}`,
-      },
-      body: JSON.stringify({ "user_id": req.auth.sub})
-    })
-    .then(( res ) => res.json() )
-    .then(( response ) => {
-      console.log(response)
-      if(response.status == "pending") return res.json({ "status": "pending" });
-      return respondError500(res, next);
-    });
+  // @desc    update User through the Auth0 Management API
+  // @route   POST /saveProfile
+  router.post('/saveProfile', isLoggedIn, async (req, res, next) => {
+    const result = userSchema.validate(req.body);
+
+    if(result.error === undefined) {
+      await auth0.updateUser({ id: req.auth.sub }, { name: req.body.name })
+        .then(response => res.json({ state: 'changed' }))
+        .catch(err => respondError500(res, next));
+    } else return respondError422(res, next);
   });
 });
 
