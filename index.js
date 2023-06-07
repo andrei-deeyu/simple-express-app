@@ -21,9 +21,7 @@ const publicApi = require('./publicAPI');
 connectDB()
 
 app.use(volleyball);
-app.use(cors({
-  origin: '*'
-}));
+app.use(cors());
 
 
 // Body parser
