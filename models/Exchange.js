@@ -1,9 +1,23 @@
 const mongoose = require('mongoose')
 
 const Exchange = new mongoose.Schema({
-  userId: {
-    type: Number,
-    required: true,
+  fromUser: {
+    userId: {
+      type: String,
+      required: true,
+    },
+    email: {
+      type: String,
+      required: true,
+    },
+    picture: {
+      type: String,
+      required: true,
+    },
+    name: {
+      type: String,
+      required: false,
+    },
   },
 
   title: {

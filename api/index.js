@@ -11,7 +11,6 @@ const Joi = require('joi');
 const Exchange = require('../models/Exchange');
 
 const postSchema = Joi.object({
-  userId: Joi.number(),
   title: Joi.string().trim().min(3).max(256).required(),
   body: Joi.string().trim().max(596).allow('')
 });
@@ -107,6 +106,12 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   if(result.error == null) {
     let newPost = {
       ...req.body,
+      fromUser: {
+        userId: userId,
+        email: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'email'],
+        picture: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'picture'],
+        name: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'name']
+      },
       createdAt: Date.now()
     }
 
@@ -120,7 +125,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
 
         return res.json(result)
       })
-      .catch(() => respondError500(res, next));
+      .catch((err) => console.log(err));
   } else {
     return respondError422(res, next, result.error.message)
   }
