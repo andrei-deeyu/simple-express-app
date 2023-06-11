@@ -11,8 +11,25 @@ const Joi = require('joi');
 const Exchange = require('../models/Exchange');
 
 const postSchema = Joi.object({
-  title: Joi.string().trim().min(3).max(256).required(),
-  body: Joi.string().trim().max(596).allow('')
+  details: Joi.string().trim().max(596).allow(''),
+  budget: Joi.number().min(0).max(1000000).allow(null),
+  valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days'),
+  pallet: {
+    type: Joi.string().valid().trim().valid('europallet', 'industrialpallet', 'other', ''),
+    number: Joi.number().min(0).max(17000).allow(null),
+  },
+  size: {
+    tonnage: Joi.number().min(0).max(17000).required(), // required
+    volume: Joi.number().min(0).max(30000).allow(null),
+    height: Joi.number().min(0).max(2000).allow(null),
+    width: Joi.number().min(0).max(2000).allow(null),
+    length: Joi.number().min(0).max(2000).allow(null),
+  },
+  truck: {
+    regime: Joi.string().valid().trim().valid('LTL', 'FTL', 'ANY').required(), // required
+    type: Joi.array().items(Joi.string().valid().trim().valid('duba', 'decopertat', 'basculanta', 'transport auto', 'prelata', 'agabaritic', 'container')).max(3),
+    features: Joi.array().items(Joi.string().valid().trim().valid('walkingfloor', 'ADR', 'FRIGO', 'izoterm', 'lift', 'MEGAtrailer')),
+  }
 });
 
 function respondError500(res, next) {
@@ -102,6 +119,17 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const reqUserSocketClient = connectedUsers[userId][userSession];
 
   const result = postSchema.validate(req.body)
+console.log(req.body)
+  // both palletName && palletNumber must be present, or neither
+  if( req.body.pallet.type && !req.body.pallet.number) {
+    let error = new Error('Ai introdus doar tipul paletului, nu si numarul acestora')
+    res.status(422);
+    return next(error);
+  } else if( req.body.pallet.number > 0 && !req.body.pallet.type ) {
+    let error = new Error('Ai introdus doar numarul de paleti, nu si tipul acestora')
+    res.status(422);
+    return next(error);
+  }
 
   if(result.error == null) {
     let newPost = {
