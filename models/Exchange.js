@@ -3,7 +3,8 @@ const mongoose = require('mongoose')
 const Exchange = new mongoose.Schema({
   details: {
     $type: String,
-    unique: false
+    unique: false,
+    required: false,
   },
   budget: {
     $type: Number,
@@ -13,17 +14,20 @@ const Exchange = new mongoose.Schema({
   valability: {
     $type: String,
     unique: false,
-    enum: ['1days', '3days', '7days', '14days', '30days']
+    enum: ['1days', '3days', '7days', '14days', '30days'],
+    required: true,
   },
   pallet: {
     type: {
       $type: String,
       unique: false,
       enum: ['europallet', 'industrialpallet', 'other', ''],
+      required: false,
     },
     number: {
       $type: Number,
-      unique: false
+      unique: false,
+      required: false,
     },
   },
   size: {
@@ -34,19 +38,23 @@ const Exchange = new mongoose.Schema({
     },
     volume: {
       $type: Number,
-      unique: false
+      unique: false,
+      required: false,
     },
     height: {
       $type: Number,
-      unique: false
+      unique: false,
+      required: false,
     },
     width: {
       $type: Number,
-      unique: false
+      unique: false,
+      required: false,
     },
     length: {
       $type: Number,
       unique: false,
+      required: false,
     },
   },
   truck: {
@@ -61,7 +69,8 @@ const Exchange = new mongoose.Schema({
       type: {
         $type: String,
         unique: false,
-        enum: ['duba', 'decopertat', 'basculanta', 'transport auto', 'prelata', 'agabaritic', 'container']
+        enum: ['duba', 'decopertat', 'basculanta', 'transport auto', 'prelata', 'agabaritic', 'container'],
+        required: false,
       }
     },
     features: {
@@ -69,7 +78,8 @@ const Exchange = new mongoose.Schema({
       features: {
         $type: String,
         unique: false,
-        enum: ['walkingfloor', 'ADR', 'FRIGO', 'izoterm', 'lift', 'MEGAtrailer']
+        enum: ['walkingfloor', 'ADR', 'FRIGO', 'izoterm', 'lift', 'MEGAtrailer'],
+        required: false,
       }
     },
   },
