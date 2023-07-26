@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
+const e = require('../errors');
+
 const { isLoggedIn } = require('../auth/middlewares');
 
 const { WebSocketServer } = require('ws');
@@ -32,28 +34,8 @@ const postSchema = Joi.object({
   }
 });
 
-function respondError500(res, next) {
-  res.status(500);
-  const error = new Error('Something happened! Try again.');
-  next(error);
-}
-
-function respondError422(res, next, message) {
-  res.status(422);
-  const error = new Error(message ?? 'Bad input');
-  next(error);
-}
-
-function respondError404(res, next) {
-  res.status(404);
-  const error = new Error('Not found');
-  next(error);
-}
-
 // save connected users in memory
-let connectedUsers = [
-
-];
+let connectedUsers = [];
 
 wss.on('connection', (socket, request) => {
   const params = request.url?.split('?')[1].split('/');
@@ -96,7 +78,7 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
     return res.json({ pagesToShow, pageActive: choosePage, result });
   } catch( err ) {
     console.log(err)
-    return respondError500(res, next);
+    return e.respondError500(res, next);
   }
 });
 
@@ -107,7 +89,7 @@ router.get('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 
   await Exchange.findOne({ _id: postId })
   .then(( result ) => res.json(result))
-  .catch(() => respondError404(res, next));
+  .catch(() => e.respondError404(res, next));
 });
 
 
@@ -155,7 +137,7 @@ console.log(req.body)
       })
       .catch((err) => console.log(err));
   } else {
-    return respondError422(res, next, result.error.message)
+    return e.respondError422(res, next, result.error.message)
   }
 });
 
@@ -176,7 +158,7 @@ router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
     });
     return res.json({})
   })
-  .catch(() => respondError500(res, next));
+  .catch(() => e.respondError500(res, next));
 })
 
 
@@ -198,7 +180,7 @@ router.patch('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 
     return res.json({})
   })
-  .catch(() => respondError500(res, next));
+  .catch(() => e.respondError500(res, next));
 })
 
 

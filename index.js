@@ -13,20 +13,26 @@ const app = express();
 
 // Import our modules
 const auth = require('./auth');
-const api = require('./api');
+const privateApi = require('./privateApi');
 const publicApi = require('./publicAPI');
 
 
 // Connect to cloud hosted MongoDB
 connectDB()
 
+
+// Dev tools
 app.use(volleyball);
+
+
+// Network security
 app.use(cors());
 
 
 // Body parser
 app.use(express.urlencoded({ extended: false }))
 app.use(express.json())
+
 
 // Method override
 app.use(
@@ -40,22 +46,21 @@ app.use(
   })
 )
 
+
+// Routes
 app.get('/', (req, res) => {
   return res.json({
     message: 'Hello World!',
   });
 });
 
-app.use('/auth', auth)
-app.use('/api/v1', api); // require authorization
-app.use('/api/v0', publicApi) // doesn't require authorization
+app.use('/auth', auth);
+app.use('/api/v0', publicApi);
+app.use('/api/v1', privateApi);
 
 
-function notFound(req, res, next) {
-  res.status(404);
-  const error = new Error('Not Found - ' + req.originalUrl);
-  next(error);
-}
+// Error Handler
+const e = require('./errors');
 
 function errorHandler(err, req, res, next) {
   res.status(res.statusCode || 500);
@@ -65,7 +70,7 @@ function errorHandler(err, req, res, next) {
   });
 }
 
-app.use(notFound);
+app.use(e.respondError404_router);
 app.use(errorHandler);
 
 const port = process.env.PORT || 5000;
