@@ -30,17 +30,20 @@ router.get('/', (req, res) => {
 // Connect to the Auth0 Management API
 auth0.getAccessToken().then((management_access_token) => {
   console.log(management_access_token)
-
-  // @desc  resend verification email
-  // @route   POST /verification-email
+  /**
+   * @desc  resend verification email
+   * @route   POST /verification-email
+  */
   router.get('/verification-email', isLoggedIn, async (req, res, next) => {
     await auth0.sendEmailVerification({ "user_id": req.auth.sub})
       .then(response => res.json({ "status": "pending" }))
       .catch(err => e.respondError500(res, next));
   });
 
-  // @desc    update User through the Auth0 Management API
-  // @route   POST /saveProfile
+  /**
+   * @desc    update User through the Auth0 Management API
+   * @route   POST /saveProfile
+  */
   router.post('/saveProfile', isLoggedIn, async (req, res, next) => {
     const result = userSchema.validate(req.body);
 
@@ -52,4 +55,37 @@ auth0.getAccessToken().then((management_access_token) => {
   });
 });
 
-module.exports = router;
+/**
+ * @desc    update User's app_metadata.company through the Auth0 Management API
+*/
+async function addEmployeeMetadata(company_id, employee_userId) {
+  return await auth0.updateUser({ id: employee_userId }, { app_metadata: { company: company_id } })
+    .then((response) => response.app_metadata.company ? { state: 'added' } : null)
+    .catch(err => err);
+}
+
+/**
+ * @desc    search users by email through the Auth0 Management API
+*/
+async function searchUsers(email) {
+  return await auth0.getUsers({ 'q': `email: *${email}*` } )
+    .then((response) => {
+      let users = [];
+      response.forEach(element => {
+        let user = {
+          userId: element.user_id,
+          email: element.email,
+          picture: element.picture,
+          name: element.name
+        }
+        users.push(user);
+      });
+
+      return users;
+    })
+    .catch(err => err);
+}
+
+module.exports = {
+  router, addEmployeeMetadata, searchUsers
+}

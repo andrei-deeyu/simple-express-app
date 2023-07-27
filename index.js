@@ -54,7 +54,7 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use('/auth', auth);
+app.use('/auth', auth.router);
 app.use('/api/v0', publicApi);
 app.use('/api/v1', privateApi);
 
