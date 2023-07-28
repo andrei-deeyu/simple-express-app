@@ -18,6 +18,9 @@ const userSchema = Joi.object({
   name: Joi.string().trim().min(3).max(15).required()
 });
 
+const userSubscriptionSchema = Joi.object({
+  type: Joi.string().trim().required().valid('shipper', 'carrier', 'forwarder', 'logistic')
+});
 
 // any route in here is pre-pended with /auth
 router.get('/', (req, res) => {
@@ -30,6 +33,21 @@ router.get('/', (req, res) => {
 // Connect to the Auth0 Management API
 auth0.getAccessToken().then((management_access_token) => {
   console.log(management_access_token)
+
+  /**
+   * @desc    change User subscription
+   * @route   POST /subscription
+  */
+  router.post('/subscription', isLoggedIn, async (req, res, next) => {
+    const result = userSubscriptionSchema.validate(req.body);
+
+    if(result.error === undefined) {
+      await auth0.updateUser({ id: req.auth.sub }, { app_metadata: { subscription: req.body.type } })
+        .then(response => res.json({ state: 'changed' }))
+        .catch(err => e.respondError500(res, next));
+    } else return e.respondError422(res, next);
+  });
+
   /**
    * @desc  resend verification email
    * @route   POST /verification-email

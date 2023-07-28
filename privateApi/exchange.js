@@ -97,6 +97,7 @@ router.get('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 // @route  POST /exchange
 router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
+  const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
   const userSession = JSON.parse(req.get('userSession'));
   const reqUserSocketClient = connectedUsers[userId][userSession];
 
@@ -113,7 +114,7 @@ console.log(req.body)
     return next(error);
   }
 
-  if(result.error == null) {
+  if((userSubscription === 'shipper' || userSubscription === 'forwarder') && result.error == null) {
     let newPost = {
       ...req.body,
       fromUser: {
@@ -135,7 +136,7 @@ console.log(req.body)
 
         return res.json(result)
       })
-      .catch((err) => console.log(err));
+      .catch((err) => e.respondError500(res, next));
   } else {
     return e.respondError422(res, next, result.error.message)
   }
@@ -144,21 +145,30 @@ console.log(req.body)
 // @desc   remove post
 // @route  DELETE /exchange/post/:postId
 router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
-  const userId = req.auth.sub.split('auth0|')[1];
+  const reqUserId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[userId][userSession];
+  const reqUserSocketClient = connectedUsers[reqUserId][userSession];
 
   let postId = req.params.postId;
 
-  await Exchange.findOneAndRemove({ _id: postId })
-  .then(() => {
-    wss.clients.forEach((client) => {
-      if( client !== reqUserSocketClient )
-        client.send(JSON.stringify({ removed: postId }))
-    });
-    return res.json({})
-  })
-  .catch(() => e.respondError500(res, next));
+  async function hasPermission() {
+    return await Exchange.findOne({ _id: postId })
+    .then(( result ) => reqUserId == result.fromUser.userId ? true : false)
+    .catch(() => e.respondError404(res, next));
+  }
+
+  if(await hasPermission()) {
+    await Exchange.findOneAndRemove({ _id: postId })
+    .then(() => {
+      wss.clients.forEach((client) => {
+        if( client !== reqUserSocketClient )
+          client.send(JSON.stringify({ removed: postId }))
+      });
+      return res.json({})
+    })
+    .catch(() => e.respondError500(res, next));
+  }
+  return e.respondError403(res, next);
 })
 
 
