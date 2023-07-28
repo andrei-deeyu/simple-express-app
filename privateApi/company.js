@@ -68,6 +68,40 @@ router.post('/company', isLoggedIn, async (req, res, next) => {
   }
 });
 
+
+// @desc   update existing company's name
+// @route  PATCH /company/:company_id
+router.patch('/company/:company_id', isLoggedIn, async (req, res, next) => {
+  const userId = req.auth.sub.split('auth0|')[1];
+  console.log('got')
+  console.log(req.body)
+
+  const result = companySchema.validate(req.body)
+
+  async function hasPermission() {
+    return await Company.findOne({ _id: req.params.company_id })
+    .then(( result ) => userId == result.admin.userId ? true : false)
+    .catch(() => e.respondError403(res, next));
+  }
+
+  if(result.error == null && await hasPermission() == true) {
+    await Company.findOneAndUpdate({_id: req.params.company_id}, { name: req.body.name }, { new: true })
+      .then(( result ) => {
+        result.__v = undefined;
+        console.log(result);
+        return res.json(result)
+      })
+      .catch((err) => {
+        console.log(err);
+        return e.respondError404(res, next)
+      });
+  } else {
+    console.log(result.error.message)
+    return e.respondError422(res, next, result.error.message)
+  }
+});
+
+
 // @desc add employee to the company
 // @route POST /company/addemployee
 router.post('/company/addemployee', isLoggedIn, async (req, res, next) => {
@@ -78,7 +112,7 @@ router.post('/company/addemployee', isLoggedIn, async (req, res, next) => {
   async function hasPermission() {
     return await Company.findOne({ _id: company_id })
     .then(( result ) => req_userid == result.admin.userId ? true : false)
-    .catch(() => e.respondError404(res, next));
+    .catch(() => e.respondError403(res, next));
   }
 
   async function addEmployeeToDB() {
