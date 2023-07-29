@@ -1,6 +1,21 @@
 const mongoose = require('mongoose')
 
 const Exchange = new mongoose.Schema({
+  origin: {
+    $type: String,
+    unique: false,
+    required: true,
+  },
+  destination: {
+    $type: String,
+    unique: false,
+    required: true,
+  },
+  distance: {
+    $type: String,
+    unique: false,
+    required: true,
+  },
   details: {
     $type: String,
     unique: false,

@@ -13,6 +13,9 @@ const Joi = require('joi');
 const Exchange = require('../models/Exchange');
 
 const postSchema = Joi.object({
+  origin: Joi.string().trim().min(3).max(596).required(),
+  destination: Joi.string().trim().min(3).max(596).required(),
+  distance: Joi.string().trim().min(3).max(596).required(),
   details: Joi.string().trim().max(596).allow(''),
   budget: Joi.number().min(0).max(1000000).allow(null),
   valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days'),
