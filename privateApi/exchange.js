@@ -50,6 +50,19 @@ wss.on('connection', (socket, request) => {
   socket.on('close', () => delete connectedUsers[userId][userSession])
 })
 
+// @desc    search exchange
+// @route   GET /exchange/search/:s
+router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
+  var regex = new RegExp('' + req.params.s + '');
+
+  await Exchange.find({ 'fromUser.name': regex})
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean()
+    .then((result) => res.json(result))
+    .catch((err) => e.respondError404(res, next));
+});
+
 // @desc    get exchange data
 // @route   GET /exchange
 router.get('/exchange', isLoggedIn, async (req, res, next) => {
@@ -99,7 +112,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[userId][userSession];
+  const reqUserSocketClient = connectedUsers[userId]?.[userSession];
 
   const result = postSchema.validate(req.body)
 console.log(req.body)
@@ -147,7 +160,7 @@ console.log(req.body)
 router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   const reqUserId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[reqUserId][userSession];
+  const reqUserSocketClient = connectedUsers[reqUserId]?.[userSession];
 
   let postId = req.params.postId;
 
@@ -177,7 +190,7 @@ router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 router.patch('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[userId][userSession];
+  const reqUserSocketClient = connectedUsers[userId]?.[userSession];
 
   let postId = req.params.postId;
 
