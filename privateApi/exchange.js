@@ -56,13 +56,16 @@ wss.on('connection', (socket, request) => {
 // @desc    search exchange
 // @route   GET /exchange/search/:s
 router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
-  var regex = new RegExp('' + req.params.s + '');
+  var regex = new RegExp('' + req.params.s + '', "i");
 
-  await Exchange.find({ 'fromUser.name': regex})
+  await Exchange.find({$or: [ {origin: regex},{destination: regex} ] })
     .sort({ createdAt: -1 })
     .limit(5)
     .lean()
-    .then((result) => res.json(result))
+    .then((result) => {
+      console.log(result)
+      return res.json(result)
+    })
     .catch((err) => e.respondError404(res, next));
 });
 

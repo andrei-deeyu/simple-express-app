@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "db:seed": "node config/db-seeder.js"
   },
   "author": "",
   "license": "ISC",
@@ -24,5 +25,8 @@
     "nodemon": "^2.0.22",
     "volleyball": "^1.5.1",
     "ws": "^8.13.0"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.0.2"
   }
 }
