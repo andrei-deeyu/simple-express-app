@@ -72,26 +72,43 @@ router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
 // @desc    get exchange data
 // @route   GET /exchange
 router.get('/exchange', isLoggedIn, async (req, res, next) => {
-  console.log(req.body)
-  console.log(req.auth)
   let choosePage;
+  let filters = {};
 
   if( req.get('choosePage') ) choosePage = JSON.parse( req.get('choosePage') );
   else choosePage = 1;
+  if( req.get('filters') ) filters = JSON.parse( req.get('filters') );
 
   let perPage = 9;
   let n = (choosePage-1) * perPage;
 
+  let queryFilters = { $and: []};
+
+  Object.entries(filters).forEach(keyvalue => {
+    let key = keyvalue[0];
+    let value = keyvalue[1];
+    let key_nested = Object.keys(value)[0];
+    let value_nested = Object.values(value)[0];
+
+    let queryKey = `${key}.${key_nested}`;
+    let minValue = { $gte: value_nested[0] };
+    let maxValue = { $lte: value_nested[1] };
+
+    if(maxValue.$lte) queryFilters.$and.push({ [queryKey]: maxValue });
+    if(minValue.$gte) queryFilters.$and.push({ [queryKey]: minValue });
+  })
 
   try {
-    let result = await Exchange.find({})
+    let result = await Exchange.find(queryFilters.$and.length > 0 ? queryFilters : null)
     .sort({ createdAt: -1 })
     .skip(n)
     .limit(perPage)
       .populate()
       .lean();
 
-    let collectionSize = await Exchange.estimatedDocumentCount();
+    let collectionSize;
+    if(filters) collectionSize = await Exchange.countDocuments(queryFilters.$and.length > 0 ? queryFilters : null);
+    else collectionSize = await Exchange.estimatedDocumentCount();
     let pagesToShow = Math.ceil(collectionSize / perPage)
 
     return res.json({ pagesToShow, pageActive: choosePage, result });
