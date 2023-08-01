@@ -12,17 +12,17 @@ for (let i = 0; i < numberOf; i++) {
   fakeFreights.push({
     origin: faker.location.city(),
     destination: faker.location.city(),
-    distance: faker.number.int({min: 120, max: 3000}) + ' km',
+    distance: faker.number.int({min: 120, max: 3000}),
     details: faker.lorem.sentence(),
-    budget: faker.number.int(400, 4000),
+    budget: faker.number.int({min: 400, max: 4000}),
     valability: '7days',
     pallet: {
       type: 'europallet',
-      number: faker.number.int(2,18)
+      number: faker.number.int({min: 2, max: 18})
     },
     size: {
-      tonnage: faker.number.int(1,24),
-      volume: faker.number.int(2,18),
+      tonnage: faker.number.int({min: 1, max: 24}),
+      volume: faker.number.int({min: 2, max: 18}),
       height: faker.number.float({min: 1, max: 3, precision: 0.01}),
       width: faker.number.float({min: 1, max: 3, precision: 0.01}),
       length: faker.number.float({min: 1, max: 8, precision: 0.01}),

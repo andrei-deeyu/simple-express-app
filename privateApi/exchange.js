@@ -15,7 +15,7 @@ const Exchange = require('../models/Exchange');
 const postSchema = Joi.object({
   origin: Joi.string().trim().min(3).max(596).required(),
   destination: Joi.string().trim().min(3).max(596).required(),
-  distance: Joi.string().trim().min(3).max(596).required(),
+  distance: Joi.number().min(0).max(36000).required(),
   details: Joi.string().trim().max(596).allow(''),
   budget: Joi.number().min(0).max(1000000).allow(null),
   valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days'),
@@ -62,10 +62,7 @@ router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
     .sort({ createdAt: -1 })
     .limit(5)
     .lean()
-    .then((result) => {
-      console.log(result)
-      return res.json(result)
-    })
+    .then((result) => res.json(result))
     .catch((err) => e.respondError404(res, next));
 });
 
@@ -73,7 +70,7 @@ router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
 // @route   GET /exchange
 router.get('/exchange', isLoggedIn, async (req, res, next) => {
   let choosePage;
-  let filters = {};
+  let filters = {}; // sanitize them
 
   if( req.get('choosePage') ) choosePage = JSON.parse( req.get('choosePage') );
   else choosePage = 1;
@@ -84,18 +81,19 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
 
   let queryFilters = { $and: []};
 
-  Object.entries(filters).forEach(keyvalue => {
-    let key = keyvalue[0];
-    let value = keyvalue[1];
-    let key_nested = Object.keys(value)[0];
-    let value_nested = Object.values(value)[0];
+  Object.entries(filters).forEach(el => {
+    let key = el[0];
+    let value = el[1];
 
-    let queryKey = `${key}.${key_nested}`;
-    let minValue = { $gte: value_nested[0] };
-    let maxValue = { $lte: value_nested[1] };
+    if((typeof value[0] || typeof value[1]) == 'number' || null) {
+      let minValue = { $gte: value[0] };
+      let maxValue = { $lte: value[1] };
 
-    if(maxValue.$lte) queryFilters.$and.push({ [queryKey]: maxValue });
-    if(minValue.$gte) queryFilters.$and.push({ [queryKey]: minValue });
+      if(minValue.$gte) queryFilters.$and.push({ [key]: minValue });
+      if(maxValue.$lte) queryFilters.$and.push({ [key]: maxValue });
+    } else if(typeof value[0] == 'string') {
+      queryFilters.$and.push({ [key]: { $in: value } })
+    }
   })
 
   try {
@@ -107,7 +105,7 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
       .lean();
 
     let collectionSize;
-    if(filters) collectionSize = await Exchange.countDocuments(queryFilters.$and.length > 0 ? queryFilters : null);
+    if(queryFilters.$and.length > 0 ) collectionSize = await Exchange.countDocuments(queryFilters);
     else collectionSize = await Exchange.estimatedDocumentCount();
     let pagesToShow = Math.ceil(collectionSize / perPage)
 
@@ -136,6 +134,8 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
   const userSession = JSON.parse(req.get('userSession'));
   const reqUserSocketClient = connectedUsers[userId]?.[userSession];
+
+  req.body.distance = Number(req.body.distance);
 
   const result = postSchema.validate(req.body)
 console.log(req.body)

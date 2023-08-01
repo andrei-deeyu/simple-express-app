@@ -12,7 +12,7 @@ const Exchange = new mongoose.Schema({
     required: true,
   },
   distance: {
-    $type: String,
+    $type: Number,
     unique: false,
     required: true,
   },

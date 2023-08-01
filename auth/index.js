@@ -32,7 +32,7 @@ router.get('/', (req, res) => {
 
 // Connect to the Auth0 Management API
 auth0.getAccessToken().then((management_access_token) => {
-  console.log(management_access_token)
+  console.log('Auth0 Management API accessed succesfully')
 
   /**
    * @desc    change User subscription
