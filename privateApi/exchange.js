@@ -56,7 +56,7 @@ wss.on('connection', (socket, request) => {
 // @desc    search exchange
 // @route   GET /exchange/search/:s
 router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
-  var regex = new RegExp('' + req.params.s + '', "i");
+  var regex = new RegExp('' + decodeURIComponent(req.params.s) + '', "i");
 
   await Exchange.find({$or: [ {origin: regex},{destination: regex} ] })
     .sort({ createdAt: -1 })
@@ -74,7 +74,7 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
 
   if( req.get('choosePage') ) choosePage = JSON.parse( req.get('choosePage') );
   else choosePage = 1;
-  if( req.get('filters') ) filters = JSON.parse( req.get('filters') );
+  if( req.get('filters') ) filters = JSON.parse(decodeURIComponent(req.get('filters')))
 
   let perPage = 9;
   let n = (choosePage-1) * perPage;
