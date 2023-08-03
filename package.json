@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@googlemaps/google-maps-services-js": "^3.3.35",
     "auth0": "^3.4.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",

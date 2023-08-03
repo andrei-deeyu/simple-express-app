@@ -11,11 +11,23 @@ const wss = new WebSocketServer({ port: 3000 });
 const Joi = require('joi');
 
 const Exchange = require('../models/Exchange');
+const { Client, UnitSystem } = require("@googlemaps/google-maps-services-js");
+
 
 const postSchema = Joi.object({
   origin: Joi.string().trim().min(3).max(596).required(),
   destination: Joi.string().trim().min(3).max(596).required(),
   distance: Joi.number().min(0).max(36000).required(),
+  geometry: Joi.object({
+    origin: Joi.object({
+      lat: Joi.number().min(0).max(36000).required(),
+      lng: Joi.number().min(0).max(36000).required(),
+    }),
+    destination: Joi.object({
+      lat: Joi.number().min(0).max(36000).required(),
+      lng: Joi.number().min(0).max(36000).required(),
+    })
+  }),
   details: Joi.string().trim().max(596).allow(''),
   budget: Joi.number().min(0).max(1000000).allow(null),
   valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days'),
@@ -65,6 +77,73 @@ router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
     .then((result) => res.json(result))
     .catch((err) => e.respondError404(res, next));
 });
+
+router.get('/exchange/nearby', async (req, res, next) => {
+  const reqUserGeoLocation = JSON.parse(req.get('geoLocation'));
+  const nearbyRange = JSON.parse(req.get('nearbyRange')) ?? 250;
+
+  let exchange = await Exchange.find({
+    geometry: { $exists: true },
+    createdAt: { $gte: new Date().setDate(new Date().getDate() - 30) }
+  }, 'geometry origin')
+  .sort({createdAt: -1}).limit(3000).lean().then((freights) => freights)
+
+  let closest = [];
+  function getClosest25FromDB(exchange, target) {
+    exchange.forEach((freight) => {
+     let distance = Math.abs(target.lat - freight.geometry.origin.lat) + Math.abs(target.lng - freight.geometry.origin.lng)
+     closest.push({distance, geometry: freight.geometry.origin, originName: freight.origin, _id: freight._id});
+    })
+    closest.sort((a,b) => a.distance-b.distance);
+    closest.splice(0, closest.length-26);
+  }
+
+  async function calculateDistance(origin, closest25) {
+    let destinations = [];
+    closest25.forEach(el => destinations.push(el.geometry));
+
+    const client = new Client();
+    return client.distancematrix({
+      params: {
+        key: process.env.GOOGLE_MAPS_API_KEY,
+        origins: [origin],
+        destinations: destinations,
+        units: UnitSystem.metric,
+      }
+    })
+    .then(result => {
+      let nearbyFreights = [];
+      result.data.rows[0].elements.forEach((el, i) => {
+        let elDistance = Math.round(el.distance.value/1000);
+        if(elDistance < nearbyRange) nearbyFreights.push({
+          distance: elDistance,
+          duration: el.duration.text,
+          name: result.data.destination_addresses[i]
+        })
+      })
+      return nearbyFreights;
+    })
+  }
+
+  getClosest25FromDB(exchange, reqUserGeoLocation);
+  let distanceResults = await calculateDistance(reqUserGeoLocation, closest)
+  let queryFreights = [];
+  distanceResults.forEach((result, i) => {
+    if(result.name.includes(closest[i].originName)) queryFreights.push(closest[i]._id)
+  })
+
+  Exchange.find({_id: { $in: queryFreights }}).then(result => {
+    let response = [];
+    distanceResults.sort((a,b) => a.distance - b.distance);
+    distanceResults.forEach(distanceResult => {
+      result.forEach(el => {
+        if(distanceResult.name.includes(el.origin)) response.push(el);
+      })
+    })
+
+    return res.json(response);
+  })
+})
 
 // @desc    get exchange data
 // @route   GET /exchange
@@ -134,8 +213,6 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
   const userSession = JSON.parse(req.get('userSession'));
   const reqUserSocketClient = connectedUsers[userId]?.[userSession];
-
-  req.body.distance = Number(req.body.distance);
 
   const result = postSchema.validate(req.body)
 console.log(req.body)

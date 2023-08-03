@@ -16,6 +16,35 @@ const Exchange = new mongoose.Schema({
     unique: false,
     required: true,
   },
+  geometry: {
+    $type: Object,
+    origin: {
+      $type: Object,
+      lat: {
+        $type: String,
+        unique: false,
+        required: true
+      },
+      lng: {
+        $type: String,
+        unique: false,
+        required: true
+      }
+    },
+    destination: {
+      $type: Object,
+      lat: {
+        $type: String,
+        unique: false,
+        required: true
+      },
+      lng: {
+        $type: String,
+        unique: false,
+        required: true
+      }
+    }
+  },
   details: {
     $type: String,
     unique: false,
