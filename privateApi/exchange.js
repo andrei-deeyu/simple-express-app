@@ -239,7 +239,7 @@ router.get('/exchange/nearby', isLoggedIn, async (req, res, next) => {
     return sortedFreights;
   }
 
-  if((userSubscription === 'shipper' || userSubscription === 'forwarder')) {
+  try {
     const freights = await get25ClosestTo(reqUserGeoLocation);
     const distancesToTarget = await calculateDistance(reqUserGeoLocation, freights)
 
@@ -247,8 +247,9 @@ router.get('/exchange/nearby', isLoggedIn, async (req, res, next) => {
     const sortedNearbyFreights = sortNearbyFreights(nearbyFreights, distancesToTarget);
 
     return res.json(sortedNearbyFreights);
+  } catch {
+    return e.respondError404(res, next);
   }
-  return e.respondError403(res, next);
 })
 
 
