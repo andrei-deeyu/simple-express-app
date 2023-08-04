@@ -3,7 +3,6 @@ const e = require('../errors');
 
 const express = require('express'),
       router = express.Router(),
-      fetch = require('node-fetch'),
       ManagementClient  = require('auth0').ManagementClient,
       Joi = require('joi');
 
@@ -31,7 +30,7 @@ router.get('/', (req, res) => {
 
 
 // Connect to the Auth0 Management API
-auth0.getAccessToken().then((management_access_token) => {
+auth0.getAccessToken().then(() => {
   console.log('Auth0 Management API accessed succesfully')
 
   /**

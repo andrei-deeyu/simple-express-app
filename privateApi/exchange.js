@@ -6,7 +6,6 @@ const e = require('../errors');
 const { isLoggedIn } = require('../auth/middlewares');
 
 const { WebSocketServer } = require('ws');
-const wss = new WebSocketServer({ port: 3000 });
 
 const Joi = require('joi');
 
@@ -49,6 +48,13 @@ const postSchema = Joi.object({
   }
 });
 
+
+/**
+  * @desc    create websocket connection
+  * @route   WSS {host}:3000
+*/
+const wss = new WebSocketServer({ port: 3000 });
+
 // save connected users in memory
 let connectedUsers = [];
 
@@ -65,88 +71,11 @@ wss.on('connection', (socket, request) => {
   socket.on('close', () => delete connectedUsers[userId][userSession])
 })
 
-// @desc    search exchange
-// @route   GET /exchange/search/:s
-router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
-  var regex = new RegExp('' + decodeURIComponent(req.params.s) + '', "i");
 
-  await Exchange.find({$or: [ {origin: regex},{destination: regex} ] })
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .lean()
-    .then((result) => res.json(result))
-    .catch((err) => e.respondError404(res, next));
-});
-
-router.get('/exchange/nearby', async (req, res, next) => {
-  const reqUserGeoLocation = JSON.parse(req.get('geoLocation'));
-  const nearbyRange = JSON.parse(req.get('nearbyRange')) ?? 250;
-
-  let exchange = await Exchange.find({
-    geometry: { $exists: true },
-    createdAt: { $gte: new Date().setDate(new Date().getDate() - 30) }
-  }, 'geometry origin')
-  .sort({createdAt: -1}).limit(3000).lean().then((freights) => freights)
-
-  let closest = [];
-  function getClosest25FromDB(exchange, target) {
-    exchange.forEach((freight) => {
-     let distance = Math.abs(target.lat - freight.geometry.origin.lat) + Math.abs(target.lng - freight.geometry.origin.lng)
-     closest.push({distance, geometry: freight.geometry.origin, originName: freight.origin, _id: freight._id});
-    })
-    closest.sort((a,b) => a.distance-b.distance);
-    closest.splice(0, closest.length-26);
-  }
-
-  async function calculateDistance(origin, closest25) {
-    let destinations = [];
-    closest25.forEach(el => destinations.push(el.geometry));
-
-    const client = new Client();
-    return client.distancematrix({
-      params: {
-        key: process.env.GOOGLE_MAPS_API_KEY,
-        origins: [origin],
-        destinations: destinations,
-        units: UnitSystem.metric,
-      }
-    })
-    .then(result => {
-      let nearbyFreights = [];
-      result.data.rows[0].elements.forEach((el, i) => {
-        let elDistance = Math.round(el.distance.value/1000);
-        if(elDistance < nearbyRange) nearbyFreights.push({
-          distance: elDistance,
-          duration: el.duration.text,
-          name: result.data.destination_addresses[i]
-        })
-      })
-      return nearbyFreights;
-    })
-  }
-
-  getClosest25FromDB(exchange, reqUserGeoLocation);
-  let distanceResults = await calculateDistance(reqUserGeoLocation, closest)
-  let queryFreights = [];
-  distanceResults.forEach((result, i) => {
-    if(result.name.includes(closest[i].originName)) queryFreights.push(closest[i]._id)
-  })
-
-  Exchange.find({_id: { $in: queryFreights }}).then(result => {
-    let response = [];
-    distanceResults.sort((a,b) => a.distance - b.distance);
-    distanceResults.forEach(distanceResult => {
-      result.forEach(el => {
-        if(distanceResult.name.includes(el.origin)) response.push(el);
-      })
-    })
-
-    return res.json(response);
-  })
-})
-
-// @desc    get exchange data
-// @route   GET /exchange
+/**
+  * @desc    get exchange
+  * @route   GET /exchange
+*/
 router.get('/exchange', isLoggedIn, async (req, res, next) => {
   let choosePage;
   let filters = {}; // sanitize them
@@ -195,19 +124,138 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
   }
 });
 
-// @desc    get post data
-// @route   GET /exchange/post/:postId
-router.get('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
-  let postId = req.params.postId;
 
-  await Exchange.findOne({ _id: postId })
-  .then(( result ) => res.json(result))
-  .catch(() => e.respondError404(res, next));
+/**
+  * @desc    search freight
+  * @route   GET /exchange/search/:s
+*/
+router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
+  var regex = new RegExp('' + decodeURIComponent(req.params.s) + '', "i");
+
+  await Exchange.find({$or: [ {origin: regex},{destination: regex} ] })
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean()
+    .then((result) => res.json(result))
+    .catch((err) => e.respondError404(res, next));
 });
 
 
-// @desc   create post
-// @route  POST /exchange
+/**
+  * @desc    get the nearest freights to user
+  * @route   GET /exchange/nearby
+*/
+router.get('/exchange/nearby', isLoggedIn, async (req, res, next) => {
+  const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription;
+  const reqUserGeoLocation = JSON.parse(req.get('geoLocation'));
+  const nearbyRange = JSON.parse(req.get('nearbyRange')) ?? 250;
+
+  async function get25ClosestTo(target) {
+    let exchange = await Exchange.find(
+      {
+        geometry: { $exists: true },
+        createdAt: { $gte: new Date().setDate(new Date().getDate() - 30) },
+      },
+      "geometry origin"
+    )
+      .sort({ createdAt: -1 })
+      .limit(3000)
+      .lean()
+      .then((freights) => freights);
+
+    exchange.forEach((freight, i) => {
+      let distance =
+        Math.abs(target.lat - freight.geometry.origin.lat) +
+        Math.abs(target.lng - freight.geometry.origin.lng);
+
+      exchange[i] = {
+        distance,
+        geometry: freight.geometry.origin,
+        originName: freight.origin, _id: freight._id
+      };
+    });
+    exchange.sort((a,b) => a.distance-b.distance);
+    exchange.splice(0, exchange.length-26);
+
+    return exchange;
+  }
+
+  async function calculateDistance(origin, destinations) {
+    let destinations_geometry = [];
+    destinations.forEach(el => destinations_geometry.push(el.geometry));
+
+    const client = new Client();
+    return client.distancematrix({
+      params: {
+        key: process.env.GOOGLE_MAPS_API_KEY,
+        origins: [origin],
+        destinations: destinations_geometry,
+        units: UnitSystem.metric,
+      }
+    })
+    .then(result => {
+      let distances = [];
+
+      result.data.rows[0].elements.forEach((el, i) => {
+        let distance_km = Math.round(el.distance.value / 1000);
+
+        if(distance_km < nearbyRange) distances.push({
+          distance: distance_km,
+          duration: el.duration.text,
+          name: result.data.destination_addresses[i]
+        })
+      });
+
+      return distances;
+    })
+  }
+
+  async function getNearbyFreights(freights, distancesToTarget) {
+    let queryIds = [];
+
+    distancesToTarget.forEach((result, i) => {
+      if(result.name.includes(freights[i].originName)) {
+        queryIds.push(freights[i]._id);
+      }
+    });
+
+    return await Exchange.find({ _id: { $in: queryIds } }).then(
+      (exchange) => exchange
+    );
+  }
+
+  function sortNearbyFreights(freights, distancesToTarget) {
+    let sortedFreights = [];
+
+    distancesToTarget.sort((a, b) => a.distance - b.distance);
+    distancesToTarget.forEach((result) => {
+      for (let i = 0; i < freights.length; i++) {
+        const freight = freights[i];
+
+        if (result.name.includes(freight.origin)) sortedFreights.push(freight);
+      }
+    });
+
+    return sortedFreights;
+  }
+
+  if((userSubscription === 'shipper' || userSubscription === 'forwarder')) {
+    const freights = await get25ClosestTo(reqUserGeoLocation);
+    const distancesToTarget = await calculateDistance(reqUserGeoLocation, freights)
+
+    const nearbyFreights = await getNearbyFreights(freights, distancesToTarget);
+    const sortedNearbyFreights = sortNearbyFreights(nearbyFreights, distancesToTarget);
+
+    return res.json(sortedNearbyFreights);
+  }
+  return e.respondError403(res, next);
+})
+
+
+/**
+  * @desc    post freight
+  * @route   POST /exchange
+*/
 router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
@@ -255,8 +303,24 @@ console.log(req.body)
   }
 });
 
-// @desc   remove post
-// @route  DELETE /exchange/post/:postId
+
+/**
+  * @desc    get freight's data
+  * @route   GET /exchange/post/:postId
+*/
+router.get('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
+  let postId = req.params.postId;
+
+  await Exchange.findOne({ _id: postId })
+  .then(( result ) => res.json(result))
+  .catch(() => e.respondError404(res, next));
+});
+
+
+/**
+  * @desc   remove freight
+  * @route  DELETE /exchange/post/:postId
+*/
 router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   const reqUserId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));
@@ -285,8 +349,10 @@ router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 })
 
 
-// @desc   like post
-// @route  PATCH /exchange/post/:postId
+/**
+  * @desc   like freight
+  * @route  PATCH /exchange/post/:postId
+*/
 router.patch('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));

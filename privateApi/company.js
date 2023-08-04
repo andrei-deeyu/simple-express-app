@@ -15,30 +15,35 @@ const companySchema = Joi.object({
 })
 
 
-// @desc    get all users by email
-// @route   GET /searchusers
+/**
+  * @desc    search users by email
+  * @route   GET /searchusers
+*/
 router.get('/searchusers/:s', isLoggedIn, async (req, res, next) => {
   searchUsers(req.params.s)
   .then(response => res.json(response))
   .catch(() => e.respondError404(res, next));
 });
 
-// @desc    get the company user administrates
-// @route   GET /company
+/**
+  * @desc    get the company user administrates
+  * @route   GET /company
+*/
 router.get('/company', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
+
   await Company.findOne({ 'admin.userId':  userId })
   .then(( result ) => res.json(result))
   .catch(() => e.respondError404(res, next));
 });
 
 
-// @desc   create company
-// @route  POST /company
+/**
+  * @desc    create company
+  * @route   POST /company
+*/
 router.post('/company', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
-  console.log('got')
-  console.log(req.body)
   const result = companySchema.validate(req.body)
 
   if(result.error == null) {
@@ -62,20 +67,16 @@ router.post('/company', isLoggedIn, async (req, res, next) => {
         if( err.code === 11000 ) return e.respondError422(res, next, "Company already exists")
         return e.respondError422(res, next)
       });
-  } else {
-    console.log(result.error.message)
-    return e.respondError422(res, next, result.error.message)
-  }
+  } else return e.respondError422(res, next, result.error.message);
 });
 
 
-// @desc   update existing company's name
-// @route  PATCH /company/:company_id
+/**
+  * @desc    update company's name
+  * @route   PATCH /company/:company_id
+*/
 router.patch('/company/:company_id', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
-  console.log('got')
-  console.log(req.body)
-
   const result = companySchema.validate(req.body)
 
   async function hasPermission() {
@@ -88,22 +89,17 @@ router.patch('/company/:company_id', isLoggedIn, async (req, res, next) => {
     await Company.findOneAndUpdate({_id: req.params.company_id}, { name: req.body.name }, { new: true })
       .then(( result ) => {
         result.__v = undefined;
-        console.log(result);
         return res.json(result)
       })
-      .catch((err) => {
-        console.log(err);
-        return e.respondError404(res, next)
-      });
-  } else {
-    console.log(result.error.message)
-    return e.respondError422(res, next, result.error.message)
-  }
+      .catch((err) => e.respondError404(res, next));
+  } else return e.respondError422(res, next, result.error.message);
 });
 
 
-// @desc add employee to the company
-// @route POST /company/addemployee
+/**
+  * @desc    add employee to the company
+  * @route   POST /company/addemployee
+*/
 router.post('/company/addemployee', isLoggedIn, async (req, res, next) => {
   const req_userid = req.auth.sub.split('auth0|')[1];
   const new_employee = req.body.new_employee;
@@ -125,10 +121,7 @@ router.post('/company/addemployee', isLoggedIn, async (req, res, next) => {
     await addEmployeeToDB();
     return await addEmployeeMetadata(company_id, new_employee.userId)
         .then((_response) => res.json(_response))
-        .catch(err => {
-          console.log(err)
-          return e.respondError500(res, next)
-        });
+        .catch(err => e.respondError500(res, next));
   }
   return e.respondError403(res, next)
 })
