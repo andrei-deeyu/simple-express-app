@@ -5,7 +5,6 @@ const e = require('../errors');
 
 const { isLoggedIn } = require('../auth/middlewares');
 
-const { WebSocketServer } = require('ws');
 
 const Joi = require('joi');
 
@@ -47,29 +46,6 @@ const postSchema = Joi.object({
     features: Joi.array().items(Joi.string().valid().trim().valid('walkingfloor', 'ADR', 'FRIGO', 'izoterm', 'lift', 'MEGAtrailer')),
   }
 });
-
-
-/**
-  * @desc    create websocket connection
-  * @route   WSS {host}:3000
-*/
-const wss = new WebSocketServer({ port: 3000 });
-
-// save connected users in memory
-let connectedUsers = [];
-
-wss.on('connection', (socket, request) => {
-  const params = request.url?.split('?')[1].split('/');
-  const userId = params[0];
-  const userSession = params[1];
-
-  connectedUsers[userId] = {
-    ...connectedUsers[userId],
-    [userSession]: socket
-  }
-
-  socket.on('close', () => delete connectedUsers[userId][userSession])
-})
 
 
 /**
@@ -146,7 +122,6 @@ router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
   * @route   GET /exchange/nearby
 */
 router.get('/exchange/nearby', isLoggedIn, async (req, res, next) => {
-  const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription;
   const reqUserGeoLocation = JSON.parse(req.get('geoLocation'));
   const nearbyRange = JSON.parse(req.get('nearbyRange')) ?? 250;
 
@@ -261,7 +236,6 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[userId]?.[userSession];
 
   const result = postSchema.validate(req.body)
 console.log(req.body)
@@ -292,9 +266,7 @@ console.log(req.body)
       .then(( result ) => {
         result.__v = undefined;
 
-        wss.clients.forEach((client) => {
-          if( client !== reqUserSocketClient ) client.send(JSON.stringify( result ))
-        });
+        require('../index').broadcast_except(userId, userSession, result);
 
         return res.json(result)
       })
@@ -325,7 +297,6 @@ router.get('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   const reqUserId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[reqUserId]?.[userSession];
 
   let postId = req.params.postId;
 
@@ -338,10 +309,9 @@ router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   if(await hasPermission()) {
     await Exchange.findOneAndRemove({ _id: postId })
     .then(() => {
-      wss.clients.forEach((client) => {
-        if( client !== reqUserSocketClient )
-          client.send(JSON.stringify({ removed: postId }))
-      });
+      let message = { removed: postId };
+      require('../index').broadcast_except(userId, userSession, message);
+
       return res.json({})
     })
     .catch(() => e.respondError500(res, next));
@@ -357,20 +327,20 @@ router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 router.patch('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSession = JSON.parse(req.get('userSession'));
-  const reqUserSocketClient = connectedUsers[userId]?.[userSession];
 
   let postId = req.params.postId;
 
   await Exchange.findOneAndUpdate({ _id: postId }, { isLiked: req.body.isLiked })
   .then(() => {
-    wss.clients.forEach((client) => {
-      if( client !== reqUserSocketClient )
-        client.send(JSON.stringify({ liked: postId, eventValue: req.body.isLiked }))
-    });
+    let message = { liked: postId, eventValue: req.body.isLiked };
+    require('../index').broadcast_except(userId, userSession, message);
 
     return res.json({})
   })
-  .catch(() => e.respondError500(res, next));
+  .catch((err) => {
+    console.log(err)
+    return e.respondError500(res, next)
+  });
 })
 
 

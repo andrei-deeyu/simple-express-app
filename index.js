@@ -1,4 +1,5 @@
 const express = require('express');
+const { WebSocketServer } = require('ws');
 const volleyball = require('volleyball');
 const cors = require('cors');
 const methodOverride = require('method-override')
@@ -59,6 +60,47 @@ app.use('/api/v0', publicApi);
 app.use('/api/v1', privateApi);
 
 
+const port = process.env.PORT || 5000;
+const server = app.listen(port, () => {
+  console.log('Listening on port', port);
+});
+
+
+
+// Create websocket connection
+const wss = new WebSocketServer({ server: server, path: '/ws' });
+
+// save connected users in memory
+let connectedUsers = [];
+
+app.get('/connectedUsers', (req, res) => {
+  return res.json({
+    connectedUsers: connectedUsers
+  });
+});
+
+wss.on('connection', (socket, request) => {
+  const params = request.url?.split('?')[1].split('/');
+  const userId = params[0];
+  const userSession = params[1];
+
+  connectedUsers[userId] = {
+    ...connectedUsers[userId],
+    [userSession]: socket
+  }
+
+  socket.on('close', () => delete connectedUsers[userId][userSession])
+})
+
+const broadcast_except = (userId, userSession, message) => {
+  const user = connectedUsers[userId]?.[userSession];
+  console.log(userSession, message)
+  wss.clients.forEach((client) => {
+    if( client !== user ) client.send(JSON.stringify( message ))
+  });
+}
+
+
 // Error Handler
 const e = require('./errors');
 
@@ -73,7 +115,6 @@ function errorHandler(err, req, res, next) {
 app.use(e.respondError404_router);
 app.use(errorHandler);
 
-const port = process.env.PORT || 5000;
-app.listen(port, () => {
-  console.log('Listening on port', port);
-});
+module.exports = {
+  broadcast_except
+}
