@@ -1,5 +1,5 @@
 const express = require('express');
-const { WebSocketServer } = require('ws');
+const { Server } = require('ws');
 const volleyball = require('volleyball');
 const cors = require('cors');
 const methodOverride = require('method-override')
@@ -68,7 +68,7 @@ const server = app.listen(port, () => {
 
 
 // Create websocket connection
-const wss = new WebSocketServer({ server: server, path: '/ws' });
+const wss = new Server({ server: server, path: '/ws' });
 
 // save connected users in memory
 let connectedUsers = [];
