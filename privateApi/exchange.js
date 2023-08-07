@@ -10,6 +10,7 @@ const Joi = require('joi');
 
 const Exchange = require('../models/Exchange');
 const { Client, UnitSystem } = require("@googlemaps/google-maps-services-js");
+const Bid = require('../models/Bid');
 
 
 const postSchema = Joi.object({
@@ -47,6 +48,10 @@ const postSchema = Joi.object({
   }
 });
 
+const bidSchema = Joi.object({
+  postId: Joi.string().trim().min(6).max(596).required(),
+  price: Joi.number().min(0).max(1000000).required()
+});
 
 /**
   * @desc    get exchange
@@ -94,10 +99,7 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
     let pagesToShow = Math.ceil(collectionSize / perPage)
 
     return res.json({ pagesToShow, pageActive: choosePage, result });
-  } catch( err ) {
-    console.log(err)
-    return e.respondError500(res, next);
-  }
+  } catch( err ) { e.respondError500(res, next) }
 });
 
 
@@ -110,7 +112,7 @@ router.get('/exchange/search/:s', isLoggedIn, async (req, res, next) => {
 
   await Exchange.find({$or: [ {origin: regex},{destination: regex} ] })
     .sort({ createdAt: -1 })
-    .limit(5)
+    .limit(7)
     .lean()
     .then((result) => res.json(result))
     .catch((err) => e.respondError404(res, next));
@@ -238,7 +240,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
   const userSession = JSON.parse(req.get('userSession'));
 
   const result = postSchema.validate(req.body)
-console.log(req.body)
+
   // both palletName && palletNumber must be present, or neither
   if( req.body.pallet.type && !req.body.pallet.number) {
     let error = new Error('Ai introdus doar tipul paletului, nu si numarul acestora')
@@ -270,7 +272,7 @@ console.log(req.body)
 
         return res.json(result)
       })
-      .catch((err) => e.respondError500(res, next));
+      .catch((err) => { return e.respondError500(res, next) });
   } else {
     return e.respondError422(res, next, result.error.message)
   }
@@ -310,13 +312,12 @@ router.delete('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
     await Exchange.findOneAndRemove({ _id: postId })
     .then(() => {
       let message = { removed: postId };
-      require('../index').broadcast_except(userId, userSession, message);
+      require('../index').broadcast_except(reqUserId, userSession, message);
 
       return res.json({})
     })
-    .catch(() => e.respondError500(res, next));
-  }
-  return e.respondError403(res, next);
+    .catch((err) => { return e.respondError500(res, next) });
+  } else return e.respondError403(res, next);
 })
 
 
@@ -337,11 +338,141 @@ router.patch('/exchange/post/:postId', isLoggedIn, async (req, res, next) => {
 
     return res.json({})
   })
-  .catch((err) => {
-    console.log(err)
-    return e.respondError500(res, next)
-  });
+  .catch((err) => { return e.respondError500(res, next) });
 })
 
 
+/**
+  * @desc    get bids for specific freight post
+  * @route   GET /exchange/:postId/bids
+*/
+router.get('/exchange/:postId/bids', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  //const userSession = JSON.parse(req.get('userSession'));
+
+  let postId = req.params.postId;
+
+  async function isAuthor() {
+    return await Exchange.findOne({ _id: postId })
+    .then(( result ) => reqUserId == result.fromUser.userId ? true : false)
+    .catch(() => e.respondError404(res, next));
+  }
+
+  async function bidScoreboard(reqUserBid) {
+    return await Bid.find({ postId: postId })
+    .sort({ price: 1 })
+    .then(bids => {
+      bids.sort((a, b) => a.price - b.price)
+
+      let lowestBid = bids[0];
+      let reqUserBidPosition = bids.findIndex(i => i.fromUser.userId == reqUserBid.fromUser.userId) + 1;
+
+      return { lowestBid, reqUserBidPosition }
+    });
+  }
+
+  if(await isAuthor()) {
+    await Bid.find({ postId: postId })
+    .then((bids) => res.json(bids) )
+    .catch(() => e.respondError500(res, next));
+  } else {
+    await Bid.find({postId: postId, 'fromUser.userId': reqUserId})
+    .then(async (reqUserBid) => {
+      if(reqUserBid[0]) {
+        let result = [
+          reqUserBid[0],
+          await bidScoreboard(reqUserBid[0])
+        ]
+        return res.json( result );
+      }
+      return res.json([])
+    })
+  }
+});
+
+
+/**
+  * @desc    create/update bid offer
+  * @route   post /exchange/:postId/bid
+*/
+router.put('/exchange/:postId/bid', isLoggedIn, async (req, res, next) => {
+  const userId = req.auth.sub.split('auth0|')[1];
+  const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
+  const userSession = JSON.parse(req.get('userSession'));
+
+  req.body.postId = req.params.postId;
+
+  const result = bidSchema.validate(req.body)
+
+  if((userSubscription === 'carrier' || userSubscription === 'logistic') && result.error == null) {
+    let newBid = {
+      ...req.body,
+      fromUser: {
+        userId: userId,
+        email: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'email'],
+        picture: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'picture'],
+        name: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'name']
+      },
+      createdAt: Date.now()
+    }
+
+    async function bidScoreboard(reqUserBid) {
+      return await Bid.find({ postId: req.body.postId })
+      .sort({ price: 1 })
+      .then(bids => {
+        bids.sort((a, b) => a.price - b.price)
+
+        let lowestBid = bids[0];
+        let reqUserBidPosition = bids.findIndex(i => i.fromUser.userId == reqUserBid.fromUser.userId) + 1;
+
+        return { lowestBid, reqUserBidPosition }
+      });
+    }
+
+    await Bid.findOneAndUpdate({ 'postId': req.body.postId, 'fromUser.userId': userId }, newBid, { upsert: true, new: true })
+      .then(async ( result ) => {
+        //result.__v = undefined;
+
+        require('../index').broadcast_except(userId, userSession, result);
+
+        let response = [
+          result,
+          await bidScoreboard(result)
+        ]
+        return res.json( response );
+      })
+      .catch((err) => e.respondError500(res, next))
+  } else {
+    return e.respondError422(res, next, result?.error?.message ?? '')
+  }
+});
+
+
+/**
+  * @desc   remove bid
+  * @route  DELETE /exchange/:postId/bids
+*/
+router.delete('/exchange/:bidId/bid', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  const userSession = JSON.parse(req.get('userSession'));
+
+  let bidId = req.params.bidId;
+
+  async function hasPermission() {
+    return await Bid.findOne({ _id: bidId })
+    .then(( result ) => reqUserId == result.fromUser.userId ? true : false)
+    .catch(() => e.respondError404(res, next));
+  }
+
+  if(await hasPermission()) {
+    await Bid.findOneAndRemove({ _id: bidId })
+    .then(() => {
+      let message = { removedBid: bidId };
+      require('../index').broadcast_except(reqUserId, userSession, message);
+
+      return res.json({})
+    })
+    .catch((err) => e.respondError500(res, next));
+  } else return e.respondError403(res, next);
+})
 module.exports = router

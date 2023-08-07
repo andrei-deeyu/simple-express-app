@@ -14,7 +14,7 @@ const auth0 = new ManagementClient ({
 });
 
 const userSchema = Joi.object({
-  name: Joi.string().trim().min(3).max(15).required()
+  name: Joi.string().trim().min(3).max(26).required()
 });
 
 const userSubscriptionSchema = Joi.object({
