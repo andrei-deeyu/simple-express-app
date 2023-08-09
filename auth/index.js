@@ -14,7 +14,8 @@ const auth0 = new ManagementClient ({
 });
 
 const userSchema = Joi.object({
-  name: Joi.string().trim().min(3).max(26).required()
+  name: Joi.string().trim().min(5).max(26),
+  phoneNumber: Joi.string().min(8).max(16),
 });
 
 const userSubscriptionSchema = Joi.object({
@@ -62,13 +63,24 @@ auth0.getAccessToken().then(() => {
    * @route   POST /saveProfile
   */
   router.post('/saveProfile', isLoggedIn, async (req, res, next) => {
+    let profileUpdates = {};
+    if(!req.body.name) delete req.body.name; // just one of those is required
+      else profileUpdates.name = req.body.name;
+    if(!req.body.phoneNumber) delete req.body.phoneNumber;
+      else profileUpdates.app_metadata = { phoneNumber: Number(req.body.phoneNumber) };
+
     const result = userSchema.validate(req.body);
+    console.log(req.body)
+    console.log(JSON.stringify(profileUpdates));
 
     if(result.error === undefined) {
-      await auth0.updateUser({ id: req.auth.sub }, { name: req.body.name })
+      await auth0.updateUser({ id: req.auth.sub }, profileUpdates)
         .then(response => res.json({ state: 'changed' }))
-        .catch(err => e.respondError500(res, next));
-    } else return e.respondError422(res, next);
+        .catch(err => {
+          console.log(err)
+          return e.respondError500(res, next)
+        });
+    } else return e.respondError422(res, next, result.error.message);
   });
 });
 

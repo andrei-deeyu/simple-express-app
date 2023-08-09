@@ -13,6 +13,16 @@ for (let i = 0; i < numberOf; i++) {
     origin: faker.location.city(),
     destination: faker.location.city(),
     distance: faker.number.int({min: 120, max: 3000}),
+    geometry: {
+      origin: {
+        lat: faker.number.int({min: -90, max: 90}),
+        lng: faker.number.int({min: -90, max: 90})
+      },
+      destination: {
+        lat: faker.number.int({min: -90, max: 90}),
+        lng: faker.number.int({min: -90, max: 90})
+      }
+    },
     details: faker.lorem.sentence(),
     budget: faker.number.int({min: 400, max: 4000}),
     valability: '7days',
@@ -35,6 +45,7 @@ for (let i = 0; i < numberOf; i++) {
     fromUser: {
       userId: faker.string.uuid(),
       email: faker.internet.email(),
+      phoneNumber: faker.phone.number('07########'),
       picture: faker.internet.avatar(),
       name: faker.person.fullName(),
     },

@@ -136,6 +136,10 @@ const Exchange = new mongoose.Schema({
       $type: String,
       required: true,
     },
+    phoneNumber: {
+      $type: Number,
+      required: true
+    },
     picture: {
       $type: String,
       required: true,

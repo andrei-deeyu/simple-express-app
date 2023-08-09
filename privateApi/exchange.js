@@ -251,6 +251,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
     res.status(422);
     return next(error);
   }
+  console.log(req.auth)
 
   if((userSubscription === 'shipper' || userSubscription === 'forwarder') && result.error == null) {
     let newPost = {
@@ -258,6 +259,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
       fromUser: {
         userId: userId,
         email: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'email'],
+        phoneNumber: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].phoneNumber,
         picture: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'picture'],
         name: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'name']
       },
@@ -272,7 +274,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
 
         return res.json(result)
       })
-      .catch((err) => { return e.respondError500(res, next) });
+      .catch((err) => { console.log(err); return e.respondError500(res, next) });
   } else {
     return e.respondError422(res, next, result.error.message)
   }
@@ -410,6 +412,7 @@ router.put('/exchange/:postId/bid', isLoggedIn, async (req, res, next) => {
       fromUser: {
         userId: userId,
         email: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'email'],
+        phoneNumber: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].phoneNumber,
         picture: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'picture'],
         name: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'name']
       },
@@ -466,8 +469,9 @@ router.delete('/exchange/:bidId/bid', isLoggedIn, async (req, res, next) => {
 
   if(await hasPermission()) {
     await Bid.findOneAndRemove({ _id: bidId })
-    .then(() => {
-      let message = { removedBid: bidId };
+    .then((result) => {
+      console.log(result);
+      let message = { removedBid: bidId, postId: result.postId };
       require('../index').broadcast_except(reqUserId, userSession, message);
 
       return res.json({})
