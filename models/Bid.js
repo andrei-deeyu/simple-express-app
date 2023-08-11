@@ -11,6 +11,24 @@ const Bid = new mongoose.Schema({
     unique: false,
     required: false
   },
+  valability: {
+    $type: String,
+    unique: false,
+    enum: ['1days', '3days', '7days', '14days', '30days'],
+    required: true,
+  },
+  // transportationDate: {
+  //   pickup: {
+  //     $type: Date,
+  //     unique: false,
+  //     required: true
+  //   },
+  //   delivery: {
+  //     $type: Date,
+  //     unique: false,
+  //     required: true
+  //   }
+  // },
   fromUser: {
     userId: {
       $type: String,

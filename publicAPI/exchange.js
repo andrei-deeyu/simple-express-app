@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Exchange = require('../models/Exchange');
-
+const Bid = require('../models/Bid');
 const e = require('../errors');
 
 /**
@@ -35,5 +35,29 @@ router.get('/exchange/post/:postId', async (req, res, next) => {
   .catch(( err ) => e.respondError404(res, next));
 });
 
+
+/**
+  * @desc    get anonymous bids for specific freight post
+  * @route   GET /exchange/:postId/bids
+*/
+router.get('/exchange/:postId/bids', async (req, res, next) => {
+  let postId = req.params.postId;
+
+  await Bid.find({ postId: postId })
+    .then((bids) => {
+      bids.forEach(el => {
+        el.fromUser = {
+          userId: '',
+          email: 'xx@gmail.com',
+          phoneNumber: 0o700000000,
+          picture: 'https://cdn2.iconfinder.com/data/icons/gaming-and-beyond-part-2-1/80/User_gray-512.png', // change this!
+          name: 'Anonymous User'
+        }
+      });
+      console.log(bids)
+      return res.json(bids);
+    })
+    .catch(() => e.respondError500(res, next));
+});
 
 module.exports = router
