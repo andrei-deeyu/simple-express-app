@@ -1,4 +1,5 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
+const User = require('./User');
 
 const Bid = new mongoose.Schema({
   postId: {
@@ -17,40 +18,7 @@ const Bid = new mongoose.Schema({
     enum: ['1days', '3days', '7days', '14days', '30days'],
     required: true,
   },
-  // transportationDate: {
-  //   pickup: {
-  //     $type: Date,
-  //     unique: false,
-  //     required: true
-  //   },
-  //   delivery: {
-  //     $type: Date,
-  //     unique: false,
-  //     required: true
-  //   }
-  // },
-  fromUser: {
-    userId: {
-      $type: String,
-      required: true,
-    },
-    email: {
-      $type: String,
-      required: true,
-    },
-    phoneNumber: {
-      $type: Number,
-      required: true
-    },
-    picture: {
-      $type: String,
-      required: true,
-    },
-    name: {
-      $type: String,
-      required: false,
-    },
-  },
+  fromUser: User.obj,
   createdAt: {
     $type: Date,
     required: true

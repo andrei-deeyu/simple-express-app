@@ -1,4 +1,5 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
+const User = require('./User');
 
 const Exchange = new mongoose.Schema({
   origin: {
@@ -127,28 +128,7 @@ const Exchange = new mongoose.Schema({
       }
     },
   },
-  fromUser: {
-    userId: {
-      $type: String,
-      required: true,
-    },
-    email: {
-      $type: String,
-      required: true,
-    },
-    phoneNumber: {
-      $type: Number,
-      required: true
-    },
-    picture: {
-      $type: String,
-      required: true,
-    },
-    name: {
-      $type: String,
-      required: false,
-    },
-  },
+  fromUser: User.obj,
   isLiked: {
     $type: Boolean,
     required: false

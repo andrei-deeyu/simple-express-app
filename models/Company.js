@@ -1,4 +1,5 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
+const User = require('./User');
 
 const Company = new mongoose.Schema({
   name: {
@@ -11,28 +12,7 @@ const Company = new mongoose.Schema({
     unique: true,
     required: true
   },
-  admin: {
-    userId: {
-      $type: String,
-      required: true,
-    },
-    email: {
-      $type: String,
-      required: true,
-    },
-    phoneNumber: {
-      $type: Number,
-      required: true
-    },
-    picture: {
-      $type: String,
-      required: true,
-    },
-    name: {
-      $type: String,
-      required: false,
-    },
-  },
+  admin: User.obj,
   employees: {
     $type: Array,
     employee: {

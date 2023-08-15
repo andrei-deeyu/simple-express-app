@@ -66,7 +66,6 @@ const server = app.listen(port, () => {
 });
 
 
-
 // Create websocket connection
 const wss = new Server({ server: server, path: '/ws' });
 
@@ -94,9 +93,21 @@ wss.on('connection', (socket, request) => {
 
 const broadcast_except = (userId, userSession, message) => {
   const user = connectedUsers[userId]?.[userSession];
-  console.log(userSession, message)
+
   wss.clients.forEach((client) => {
     if( client !== user ) client.send(JSON.stringify( message ))
+  });
+}
+
+const broadcast_all = (message) => {
+  wss.clients.forEach((client) => {
+    client.send(JSON.stringify( message ))
+  });
+}
+
+const broadcast_toAllUserSessions = (userId, message) => {
+  Object.values(connectedUsers[userId]).forEach((session) => {
+    session.send(JSON.stringify( message ));
   });
 }
 
@@ -116,5 +127,8 @@ app.use(e.respondError404_router);
 app.use(errorHandler);
 
 module.exports = {
-  broadcast_except
+  broadcast_except,
+  // broadcast_except_two,
+  broadcast_all,
+  broadcast_toAllUserSessions
 }

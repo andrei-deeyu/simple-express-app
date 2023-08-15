@@ -11,6 +11,7 @@ const Joi = require('joi');
 const Exchange = require('../models/Exchange');
 const { Client, UnitSystem } = require("@googlemaps/google-maps-services-js");
 const Bid = require('../models/Bid');
+const Contract = require('../models/Contract');
 
 
 const postSchema = Joi.object({
@@ -19,8 +20,8 @@ const postSchema = Joi.object({
   distance: Joi.number().min(0).max(36000).required(),
   geometry: Joi.object({
     origin: Joi.object({
-      lat: Joi.number().min(0).max(36000).required(),
-      lng: Joi.number().min(0).max(36000).required(),
+      lat: Joi.number().min(-91).max(91).required(),
+      lng: Joi.number().min(-91).max(91).required(),
     }),
     destination: Joi.object({
       lat: Joi.number().min(0).max(36000).required(),
@@ -29,7 +30,7 @@ const postSchema = Joi.object({
   }),
   details: Joi.string().trim().max(596).allow(''),
   budget: Joi.number().min(0).max(1000000).allow(null),
-  valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days'),
+  valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days').required(),
   pallet: {
     type: Joi.string().valid().trim().valid('europallet', 'industrialpallet', 'other', ''),
     number: Joi.number().min(0).max(17000).allow(null),
@@ -51,11 +52,24 @@ const postSchema = Joi.object({
 const bidSchema = Joi.object({
   postId: Joi.string().trim().min(6).max(596).required(),
   price: Joi.number().min(0).max(1000000).required(),
-  valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days'),
-  // transportationDate: {
-  //   pickup: Joi.date(),
-  //   delivery: Joi.date()
-  // }
+  valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days').required()
+});
+
+const bidNegotiateSchema = Joi.object({
+  price: Joi.number().min(0).max(1000000).required()
+});
+
+const contractSchema = Joi.object({
+  pickup: Joi.date().required(),
+  delivery: Joi.date().required()
+});
+
+const contractNegotiateSchema = Joi.object({
+  price: Joi.number().min(0).max(1000000).required(),
+  transportationDate: {
+    pickup: Joi.date().required(),
+    delivery: Joi.date().required()
+  }
 });
 
 /**
@@ -256,7 +270,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
     res.status(422);
     return next(error);
   }
-  console.log(req.auth)
+
 
   if((userSubscription === 'shipper' || userSubscription === 'forwarder') && result.error == null) {
     let newPost = {
@@ -279,7 +293,7 @@ router.post('/exchange', isLoggedIn, async (req, res, next) => {
 
         return res.json(result)
       })
-      .catch((err) => { console.log(err); return e.respondError500(res, next) });
+      .catch((err) => { return e.respondError500(res, next) });
   } else {
     return e.respondError422(res, next, result.error.message)
   }
@@ -400,12 +414,12 @@ router.get('/exchange/:postId/bids', isLoggedIn, async (req, res, next) => {
 
 /**
   * @desc    create/update bid offer
-  * @route   post /exchange/:postId/bid
+  * @route   PUT /exchange/:postId/bid
 */
 router.put('/exchange/:postId/bid', isLoggedIn, async (req, res, next) => {
   const userId = req.auth.sub.split('auth0|')[1];
   const userSubscription = req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].subscription
-  const userSession = JSON.parse(req.get('userSession'));
+  const shipper_userId = JSON.parse(req.get('shipper_userId'));
 
   req.body.postId = req.params.postId;
 
@@ -441,7 +455,16 @@ router.put('/exchange/:postId/bid', isLoggedIn, async (req, res, next) => {
       .then(async ( result ) => {
         //result.__v = undefined;
 
-        require('../index').broadcast_except(userId, userSession, result);
+        /**
+         * @broadcast_all the lowest bid
+         * @broadcast_to_shipper_sessions the result
+         */
+        let lowestBid = (await bidScoreboard(result)).lowestBid;
+        require('../index').broadcast_all(lowestBid);
+
+        if(shipper_userId) { // it comes from optional HTTP headers
+          require('../index').broadcast_toAllUserSessions(shipper_userId, result)
+        }
 
         let response = [
           result,
@@ -457,8 +480,61 @@ router.put('/exchange/:postId/bid', isLoggedIn, async (req, res, next) => {
 
 
 /**
+  * @desc    negotiate bid offer
+  * @route   PATCH /exchange/:postId/:bidId/negotiate
+*/
+router.patch('/exchange/:postId/:bidId/negotiate', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  const bidId = req.params.bidId;
+  const postId = req.params.postId;
+
+  const result = bidNegotiateSchema.validate(req.body)
+
+  async function hasPermission() {
+    return await Exchange.findOne({ _id: postId })
+    .then(( result ) => reqUserId == result.fromUser.userId ? true : false)
+    .catch((err) => e.respondError404(res, next));
+  }
+
+  async function bidScoreboard() {
+    return await Bid.find({ postId: postId })
+    .sort({ price: 1 })
+    .then(bids => {
+      bids.sort((a, b) => a.price - b.price)
+
+      let lowestBid = bids[0];
+
+      return lowestBid;
+    });
+  }
+
+  if(result.error == null && await hasPermission()) {
+    await Bid.findOneAndUpdate({ _id: bidId }, { ...req.body }, { new: true })
+      .then(async ( result ) => {
+        //result.__v = undefined;
+
+        /**
+         * @broadcast_to_consignee that his offer has been changed, this.result
+         * @broadcast_all whose lowest bid now
+         */
+        const consignee_userId = result.fromUser.userId;
+        let lowestBid = await bidScoreboard();
+
+        require('../index').broadcast_toAllUserSessions(consignee_userId, result);
+        require('../index').broadcast_all(lowestBid);
+
+        return res.json( result );
+      })
+      .catch((err) => e.respondError500(res, next))
+  } else {
+    return e.respondError422(res, next, result?.error?.message ?? '')
+  }
+});
+
+
+/**
   * @desc   remove bid
-  * @route  DELETE /exchange/:postId/bids
+  * @route  DELETE /exchange/:bidId/bids
 */
 router.delete('/exchange/:bidId/bid', isLoggedIn, async (req, res, next) => {
   const reqUserId = req.auth.sub.split('auth0|')[1];
@@ -472,16 +548,263 @@ router.delete('/exchange/:bidId/bid', isLoggedIn, async (req, res, next) => {
     .catch(() => e.respondError404(res, next));
   }
 
+  async function bidScoreboard(_postId) {
+    return await Bid.find({ postId: _postId })
+    .sort({ price: 1 })
+    .then(bids => {
+      bids.sort((a, b) => a.price - b.price)
+
+      let lowestBid = bids[0];
+
+      return lowestBid;
+    });
+  }
+
   if(await hasPermission()) {
     await Bid.findOneAndRemove({ _id: bidId })
-    .then((result) => {
-      console.log(result);
+    .then(async (result) => {
+      /**
+       * @broadcast_except_reqUser that a bid has been removed
+       * @broadcast_all whose lowest bid now
+       */
       let message = { removedBid: bidId, postId: result.postId };
+      let lowestBid = await bidScoreboard(result.postId);
+
       require('../index').broadcast_except(reqUserId, userSession, message);
+      require('../index').broadcast_all(lowestBid)
 
       return res.json({})
     })
     .catch((err) => e.respondError500(res, next));
   } else return e.respondError403(res, next);
 })
+
+
+/**
+  * @desc    get contracts
+  * @route   GET /contracts
+*/
+router.get('/contracts', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+
+  try {
+    let result = await Contract.find({
+      $or: [ { 'shipper.userId': reqUserId }, { 'consignee.userId': reqUserId } ]
+    })
+    .sort({ createdAt: -1 })
+      .populate()
+      .lean();
+
+    return res.json(result);
+  } catch( err ) { e.respondError500(res, next) }
+});
+
+
+/**
+  * @desc    get single contract
+  * @route   GET /contracts/:_id
+*/
+router.get('/contracts/:_id', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  const contractId = req.params._id;
+
+  try {
+    let result = await Contract.findOne({
+      _id: contractId,
+      $or: [ { 'shipper.userId': reqUserId }, { 'consignee.userId': reqUserId } ]
+    })
+    .sort({ createdAt: -1 })
+      .populate()
+      .lean();
+
+    return res.json(result);
+  } catch( err ) { e.respondError500(res, next) }
+});
+
+
+/**
+  * @desc   create contract - accept bid
+  * @route  POST /exchange/:postId/:bidId/
+*/
+router.post('/exchange/:postId/:bidId', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  const userSession = JSON.parse(req.get('userSession'));
+
+  let postId = req.params.postId;
+  let bidId = req.params.bidId;
+
+  async function hasPermission() {
+    return await Exchange.findOne({ _id: postId })
+    .then(( result ) => reqUserId == result.fromUser.userId ? true : false)
+    .catch(() => e.respondError404(res, next));
+  }
+
+  async function removePost() {
+    return await Exchange.findOneAndRemove({ _id: postId })
+    .then((post) => {
+      return post;
+    });
+  }
+
+  async function removePostBids() {
+    return await Bid.deleteMany({ postId: postId });
+  }
+
+  async function getBid() {
+    return await Bid.findOne({ _id: bidId })
+    .then((bid) => bid);
+  }
+
+  async function createContract(freight, bid) {
+    let newContract = {
+      freight_data: {
+        origin: freight.origin,
+        destination: freight.destination,
+        distance: freight.distance,
+        geometry: freight.geometry,
+        details: freight.details,
+        pallet: freight.pallet,
+        size: freight.size
+      },
+      shipper: freight.fromUser,
+      consignee: bid.fromUser,
+      price: bid.price,
+      status: 'pending_consignee',
+      createdAt: Date.now()
+    }
+
+    return await Contract.create(newContract)
+      .then(( result ) => {
+        result.__v = undefined;
+
+        /**
+         * @broadcast_except_reqUser that a post is unavailable
+         * @broadcast_to_consignee that he have a new contract
+         */
+        const message_post_unavailable = { postId: postId, contractCreated: result._id };
+        const consignee_userId = bid.fromUser.userId;
+        require('../index').broadcast_except(reqUserId, userSession, message_post_unavailable);
+        require('../index').broadcast_toAllUserSessions(consignee_userId, result);
+
+        return result;
+    })
+  }
+
+  try {
+    if(await hasPermission()) {
+      let freight;
+      let bid;
+
+      await removePost().then(_freight => freight = _freight);
+      await getBid().then(_bid => bid = _bid);
+      await removePostBids();
+
+      await createContract(freight, bid).then(result => res.json(result));
+    } else return e.respondError403(res, next);
+  } catch(err) {
+    return e.respondError500(res, next);
+  }
+})
+
+
+/**
+  * @desc   confirm(accept) contract
+  * @route  PATCH /contracts/:contractId/sign
+*/
+router.patch('/contracts/:contractId/confirm', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  const contractId = req.params.contractId;
+
+  let otherOneParty_userId;
+
+  const schema = contractSchema.validate(req.body);
+  let insertUpdates = {
+    status: 'confirmed'
+  }
+
+  async function hasPermission() {
+    return await Contract.findOne({ _id: contractId })
+    .then(( result ) => {
+      if( result.status == 'pending_shipper' &&
+          result.shipper.userId == reqUserId) {
+            otherOneParty_userId = result.consignee.userId
+            return true;
+          }
+
+      if( result.status == 'pending_consignee' &&
+          result.consignee.userId == reqUserId &&
+          schema.error == null) {
+            insertUpdates.transportationDate = req.body;
+            otherOneParty_userId = result.shipper.userId
+            return true
+        };
+
+      return false;
+    })
+    .catch(() => e.respondError403(res, next));
+  }
+
+  async function confirmContract() {
+    return await Contract.findOneAndUpdate({
+      _id: contractId,
+      $or: [ { 'shipper.userId': reqUserId }, { 'consignee.userId': reqUserId }  ]
+    }, insertUpdates, { new: true })
+      .then(( result ) => {
+        /**
+         * @broadcast_to_the_other_party that a contract has been confirmed, waiting for his aproval
+         */
+        if(otherOneParty_userId) {
+          require('../index').broadcast_toAllUserSessions(otherOneParty_userId, result);
+        }
+
+        return result;
+    })
+  }
+
+  try {
+    if(await hasPermission()) {
+      await confirmContract()
+        .then(result => res.json(result));
+    } else {
+      return e.respondError500(res, next)
+    }
+  } catch(err) {
+    return e.respondError500(res, next);
+  }
+})
+
+
+/**
+  * @desc    confirm+negotiate contract's charges
+  * @route   PATCH /contracts/:contractId/negotiate
+*/
+router.patch('/contracts/:contractId/negotiate', isLoggedIn, async (req, res, next) => {
+  const reqUserId = req.auth.sub.split('auth0|')[1];
+  const contractId = req.params.contractId;
+
+  const schema = contractNegotiateSchema.validate(req.body);
+
+  if(schema.error == null) {
+    await Contract.findOneAndUpdate(
+    { _id: contractId, 'consignee.userId': reqUserId},
+    { ...req.body, status: 'pending_shipper' }, { new: true })
+      .then(async ( result ) => {
+        //result.__v = undefined;
+
+        /**
+         * @broadcast_to_shipper a contract's charges has been changed, waiting for his aproval
+         */
+        const shipper_userId = result.shipper.userId;
+        require('../index').broadcast_toAllUserSessions(shipper_userId, result);
+
+
+        return res.json( result );
+      })
+      .catch((err) => e.respondError500(res, next))
+  } else {
+    return e.respondError422(res, next, schema?.error?.message ?? '')
+  }
+});
+
+
 module.exports = router
