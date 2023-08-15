@@ -472,7 +472,10 @@ router.put('/exchange/:postId/bid', isLoggedIn, async (req, res, next) => {
         ]
         return res.json( response );
       })
-      .catch((err) => e.respondError500(res, next))
+      .catch((err) => {
+        console.log(err);
+        return e.respondError500(res, next)
+      })
   } else {
     return e.respondError422(res, next, result?.error?.message ?? '')
   }
