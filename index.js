@@ -106,6 +106,9 @@ const broadcast_all = (message) => {
 }
 
 const broadcast_toAllUserSessions = (userId, message) => {
+  const userSessions = connectedUsers[userId];
+  if(!userSessions) return;
+
   Object.values(connectedUsers[userId]).forEach((session) => {
     session.send(JSON.stringify( message ));
   });
