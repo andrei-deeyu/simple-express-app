@@ -56,6 +56,12 @@ const Exchange = new mongoose.Schema({
     unique: false,
     required: false
   },
+  payment_deadline: {
+    $type: String,
+    unique: false,
+    enum: ['1days', '14days', '30days', '60days', '90days'],
+    required: true,
+  },
   valability: {
     $type: String,
     unique: false,

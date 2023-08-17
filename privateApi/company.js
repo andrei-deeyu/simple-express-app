@@ -52,7 +52,7 @@ router.post('/company', isLoggedIn, async (req, res, next) => {
       admin: {
         userId: userId,
         email: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'email'],
-        phoneNumber: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'phoneNumber'],
+        phoneNumber: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'app_metadata'].phoneNumber,
         picture: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'picture'],
         name: req.auth[process.env.ACCESS_TOKEN_NAMESPACE + 'name']
       },

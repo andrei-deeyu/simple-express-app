@@ -30,6 +30,7 @@ const postSchema = Joi.object({
   }),
   details: Joi.string().trim().max(596).allow(''),
   budget: Joi.number().min(0).max(1000000).allow(null),
+  payment_deadline: Joi.string().valid().trim().valid('1days', '14days', '30days', '60days', '90days').required(),
   valability: Joi.string().valid().trim().valid('1days', '3days', '7days', '14days', '30days').required(),
   pallet: {
     type: Joi.string().valid().trim().valid('europallet', 'industrialpallet', 'other', ''),
@@ -89,9 +90,13 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
 
   let queryFilters = { $and: []};
 
+  console.log(filters)
+
   Object.entries(filters).forEach(el => {
     let key = el[0];
     let value = el[1];
+
+    if(!value) return;
 
     if((typeof value[0] || typeof value[1]) == 'number' || null) {
       let minValue = { $gte: value[0] };
@@ -103,7 +108,7 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
       queryFilters.$and.push({ [key]: { $in: value } })
     }
   })
-
+console.log(queryFilters);
   try {
     let result = await Exchange.find(queryFilters.$and.length > 0 ? queryFilters : null)
     .sort({ createdAt: -1 })
@@ -669,6 +674,7 @@ router.post('/exchange/:postId/:bidId', isLoggedIn, async (req, res, next) => {
       shipper: freight.fromUser,
       consignee: bid.fromUser,
       price: bid.price,
+      payment_deadline: freight.payment_deadline,
       status: 'pending_consignee',
       createdAt: Date.now()
     }
