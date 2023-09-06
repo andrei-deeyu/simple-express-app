@@ -24,8 +24,8 @@ const postSchema = Joi.object({
       lng: Joi.number().min(-91).max(91).required(),
     }),
     destination: Joi.object({
-      lat: Joi.number().min(0).max(36000).required(),
-      lng: Joi.number().min(0).max(36000).required(),
+      lat: Joi.number().min(-91).max(91).required(),
+      lng: Joi.number().min(-91).max(91).required(),
     })
   }),
   details: Joi.string().trim().max(596).allow(''),
@@ -108,7 +108,7 @@ router.get('/exchange', isLoggedIn, async (req, res, next) => {
       queryFilters.$and.push({ [key]: { $in: value } })
     }
   })
-console.log(queryFilters);
+
   try {
     let result = await Exchange.find(queryFilters.$and.length > 0 ? queryFilters : null)
     .sort({ createdAt: -1 })
