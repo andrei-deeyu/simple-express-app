@@ -2,17 +2,14 @@ const express = require('express');
 const router = express.Router();
 
 const e = require('../errors');
-const { addEmployeeMetadata, searchUsers } = require('../auth/index');
-
 const { isLoggedIn } = require('../auth/middlewares');
 
-const Joi = require('joi');
-
 const Company = require('../models/Company');
-const companySchema = Joi.object({
-  name: Joi.string().trim().max(596),
-  cui: Joi.number().min(0)
-})
+
+const companySchema = require('../schemas/company.schema');
+
+const { addEmployeeMetadata, searchUsers } = require('../auth/index');
+
 
 
 /**
@@ -126,5 +123,6 @@ router.post('/company/addemployee', isLoggedIn, async (req, res, next) => {
   }
   return e.respondError403(res, next)
 })
+
 
 module.exports = router

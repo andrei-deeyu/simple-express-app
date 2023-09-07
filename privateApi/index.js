@@ -1,10 +1,15 @@
 const express = require('express');
 const router = express.Router();
 
-const exchange = require('./exchange');
 const company = require('./company');
+const exchange = require('./exchange');
+const bids = require('./bids');
+const contract = require('./contract');
 
-router.use(exchange);
 router.use(company);
+router.use(exchange);
+router.use(bids);
+router.use(contract);
+
 
 module.exports = router

@@ -119,6 +119,7 @@ const broadcast_toAllUserSessions = (userId, message) => {
 const e = require('./errors');
 
 function errorHandler(err, req, res, next) {
+  console.log(err, 'fdskajfksadj')
   res.status(res.statusCode || 500);
   res.json({
     message: err.message,
