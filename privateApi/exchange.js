@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const e = require('../errors');
+const e = require('../helpers/errors.helper');
 const { isLoggedIn } = require('../auth/middlewares');
 
 const Exchange = require('../models/Exchange');
@@ -107,7 +107,7 @@ router.get('/exchange/nearby', isLoggedIn, async (req, res, next) => {
       });
 
       freights.sort((a,b) => a.distance-b.distance);
-      freights.splice(0, freights.length-26);
+      freights.splice(0, freights.length-25);
 
       return freights;
     }

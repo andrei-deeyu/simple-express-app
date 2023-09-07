@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Exchange = require('../models/Exchange');
 const Bid = require('../models/Bid');
-const e = require('../errors');
+const e = require('../helpers/errors.helper');
 
 /**
   * @desc    get the latest 3 exchange data

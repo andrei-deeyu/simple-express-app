@@ -1,5 +1,5 @@
 const { isLoggedIn } = require('./middlewares');
-const e = require('../errors');
+const e = require('../helpers/errors.helper');
 
 const express = require('express'),
       router = express.Router(),

@@ -116,10 +116,9 @@ const broadcast_toAllUserSessions = (userId, message) => {
 
 
 // Error Handler
-const e = require('./errors');
+const e = require('./helpers/errors.helper');
 
 function errorHandler(err, req, res, next) {
-  console.log(err, 'fdskajfksadj')
   res.status(res.statusCode || 500);
   res.json({
     message: err.message,
@@ -132,7 +131,6 @@ app.use(errorHandler);
 
 module.exports = {
   broadcast_except,
-  // broadcast_except_two,
   broadcast_all,
   broadcast_toAllUserSessions
 }

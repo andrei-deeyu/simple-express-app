@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const e = require('../errors');
+const e = require('../helpers/errors.helper');
 const { isLoggedIn } = require('../auth/middlewares');
 
 const Exchange = require('../models/Exchange');
