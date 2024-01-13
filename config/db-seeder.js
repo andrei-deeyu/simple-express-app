@@ -25,6 +25,7 @@ for (let i = 0; i < numberOf; i++) {
     },
     details: faker.lorem.sentence(),
     budget: faker.number.int({min: 400, max: 4000}),
+    payment_deadline: ['1days', '14days', '30days', '60days', '90days'][Math.floor(Math.random() * 5)],
     valability: '7days',
     pallet: {
       type: 'europallet',
