@@ -1,3 +1,5 @@
+const e = require('../helpers/errors.helper');
+
 function validateSchema(schema) {
   return (req, res, next) => {
     const result = schema.validate(req.body);
