@@ -9,10 +9,10 @@ const FastUser = new mongoose.Schema({
     $type: String,
     required: false,
   },
-  phoneNumber: {
-    $type: Number,
-    required: false
-  },
+  // phoneNumber: {
+  //   $type: Number,
+  //   required: false
+  // },
   function: {
     $type: String,
     required: false,
