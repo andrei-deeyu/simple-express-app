@@ -5,6 +5,10 @@ const SignupLog = new mongoose.Schema({
     $type: String,
     required: false
   },
+  CTAID: {
+    $type: String,
+    required: false,
+  },
   userAgent: {
     $type: String,
     required: false,
